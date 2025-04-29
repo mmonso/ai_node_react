@@ -1,0 +1,54 @@
+# Dependências
+node_modules/
+.pnp/
+.pnp.js
+
+# Arquivos de build e distribuição
+/build/
+/dist/
+backend/dist/
+frontend/build/
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Diretório de uploads
+uploads/
+
+# Cache e outros arquivos temporários
+.cache/
+.temp/
+.tmp/
+coverage/
+.nyc_output/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+.directory
+
+# Arquivos IDE e editores
+/.idea/
+/.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# Arquivos de configuração local
+*.local 
