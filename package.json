@@ -1,0 +1,23 @@
+{
+  "name": "gemini-chatbot",
+  "version": "1.0.0",
+  "description": "Um chatbot modular usando NestJS e React com a API Gemini",
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && npm start",
+    "start:dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "keywords": [
+    "chatbot",
+    "nestjs",
+    "react",
+    "gemini",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+} 
