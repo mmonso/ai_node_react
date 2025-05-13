@@ -1,7 +1,8 @@
 import axios from 'axios';
-import { Conversation, Message, ModelConfig, FileResponse } from '../types';
+import { Conversation, Message, ModelConfig, FileResponse, Folder } from '../types'; // Adicionado Folder aqui
 
 const API_URL = 'http://localhost:3001/api';
+const BASE_URL = 'http://localhost:3001'; // Base URL para arquivos estáticos
 
 // API de Conversas
 export const getConversations = async (): Promise<Conversation[]> => {
@@ -11,6 +12,28 @@ export const getConversations = async (): Promise<Conversation[]> => {
 
 export const getConversation = async (id: number): Promise<Conversation> => {
   const response = await axios.get(`${API_URL}/conversations/${id}`);
+  
+  // Processar URLs de imagens para garantir que elas sejam absolutas
+  if (response.data && response.data.messages) {
+    response.data.messages = response.data.messages.map((message: Message) => {
+      if (message.imageUrl && message.imageUrl.startsWith('/uploads/')) {
+        // Converter URLs relativas para absolutas usando o domínio do backend
+        console.log('Processando URL de imagem relativa:', message.imageUrl);
+        message.imageUrl = `${BASE_URL}${message.imageUrl}`;
+        console.log('URL convertida para absoluta:', message.imageUrl);
+      }
+      
+      // Fazer o mesmo para arquivos
+      if (message.fileUrl && message.fileUrl.startsWith('/uploads/')) {
+        console.log('Processando URL de arquivo relativa:', message.fileUrl);
+        message.fileUrl = `${BASE_URL}${message.fileUrl}`;
+        console.log('URL convertida para absoluta:', message.fileUrl);
+      }
+      
+      return message;
+    });
+  }
+  
   return response.data;
 };
 
@@ -39,11 +62,12 @@ export const sendMessage = async (
   content: string, 
   file?: File,
   modelConfig?: ModelConfig
-): Promise<Message> => {
+): Promise<Message[]> => {
   const formData = new FormData();
   formData.append('content', content);
   
   if (file) {
+    console.log('Enviando arquivo:', file.name, file.type, file.size);
     formData.append('file', file);
   }
   
@@ -61,30 +85,8 @@ export const sendMessage = async (
     }
   );
   
+  console.log('Resposta do servidor (sendMessage):', response.data);
   return response.data;
-};
-
-export const streamMessage = (conversationId: number): EventSource => {
-  // Usar diretamente o EventSource sem tentar fazer reconexão aqui
-  // A lógica de reconexão será gerenciada pelo componente que usa este serviço
-  const url = `${API_URL}/conversations/${conversationId}/stream`;
-  console.log(`Conectando ao stream: ${url}`);
-  
-  try {
-    // Criamos um EventSource sem withCredentials para melhor compatibilidade
-    const source = new EventSource(url);
-    
-    // Adicionar log para debug
-    source.onopen = () => {
-      console.log(`EventSource conectado: ${url}`);
-    };
-    
-    return source;
-  } catch (e) {
-    console.error('Erro ao criar EventSource:', e);
-    // Retornamos um EventSource vazio que será tratado pelo onerror no componente
-    return new EventSource('data:,');
-  }
 };
 
 // API de Arquivos 
@@ -104,15 +106,57 @@ export const uploadFile = async (file: File): Promise<FileResponse> => {
 // API de System Prompt
 export const getSystemPrompt = async (): Promise<string> => {
   const response = await axios.get(`${API_URL}/config/system-prompt`);
-  return response.data.prompt;
+  return response.data.systemPrompt;
 };
 
 export const updateSystemPrompt = async (prompt: string): Promise<void> => {
-  await axios.put(`${API_URL}/config/system-prompt`, { prompt });
+  await axios.put(`${API_URL}/config/system-prompt`, { systemPrompt: prompt });
+};
+
+// API de Pastas
+export const getFolders = async (): Promise<Folder[]> => {
+  const response = await axios.get(`${API_URL}/folders`);
+  return response.data;
+};
+
+export const createFolder = async (name: string): Promise<Folder> => {
+  const response = await axios.post(`${API_URL}/folders`, { name });
+  return response.data;
+};
+
+export const updateFolder = async (id: number, name: string): Promise<Folder> => {
+  const response = await axios.put(`${API_URL}/folders/${id}`, { name });
+  return response.data;
+};
+
+export const deleteFolder = async (id: number): Promise<void> => {
+  await axios.delete(`${API_URL}/folders/${id}`);
+};
+
+export const addConversationToFolder = async (conversationId: number, folderId: number): Promise<Conversation> => {
+  try {
+    console.log(`API: Adicionando conversa ${conversationId} à pasta ${folderId}`);
+    const response = await axios.post(`${API_URL}/conversations/${conversationId}/folder/${folderId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Erro na API addConversationToFolder:', error);
+    throw error;
+  }
+};
+
+export const removeConversationFromFolder = async (conversationId: number): Promise<Conversation> => {
+  try {
+    console.log(`API: Removendo conversa ${conversationId} da pasta`);
+    const response = await axios.delete(`${API_URL}/conversations/${conversationId}/folder`);
+    return response.data;
+  } catch (error) {
+    console.error('Erro na API removeConversationFromFolder:', error);
+    throw error;
+  }
 };
 
 export const resetSystemPrompt = async (): Promise<void> => {
-  await axios.post(`${API_URL}/config/system-prompt/reset`);
+  await axios.put(`${API_URL}/config/system-prompt/reset`);
 };
 
 export default axios; 

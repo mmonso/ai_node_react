@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common'; // Added NotFoundException
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
+import { Folder } from '../entities/folder.entity'; // Added Folder import
 import { GeminiService } from '../gemini/gemini.service';
 import { ConfigService } from '../config/config.service';
 
@@ -15,8 +16,10 @@ export class ConversationsService {
     private messagesRepository: Repository<Message>,
     private geminiService: GeminiService,
     private configService: ConfigService,
+    @InjectRepository(Folder) // Inject Folder repository
+    private foldersRepository: Repository<Folder>,
   ) {}
-
+ 
   async findAll(): Promise<Conversation[]> {
     return this.conversationsRepository.find({
       order: { updatedAt: 'DESC' },
@@ -109,4 +112,35 @@ export class ConversationsService {
       );
     }
   }
-} 
+
+  // --- Métodos para Pastas ---
+
+  async addConversationToFolder(conversationId: number, folderId: number): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+    if (!conversation) {
+      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
+    }
+
+    const folder = await this.foldersRepository.findOneBy({ id: folderId });
+    if (!folder) {
+      throw new NotFoundException(`Pasta com ID ${folderId} não encontrada.`);
+    }
+
+    conversation.folderId = folderId;
+    conversation.updatedAt = new Date(); // Atualiza timestamp
+    
+    return this.conversationsRepository.save(conversation);
+  }
+
+  async removeConversationFromFolder(conversationId: number): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+    if (!conversation) {
+      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
+    }
+
+    conversation.folderId = null; // Define como null para remover da pasta
+    conversation.updatedAt = new Date(); // Atualiza timestamp
+
+    return this.conversationsRepository.save(conversation);
+  }
+}

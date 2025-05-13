@@ -4,6 +4,16 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   messages: Message[];
+  folderId?: number | null; // Adicionado para referência à pasta
+  folder?: Folder | null;    // Adicionado para dados da pasta, se carregados
+}
+
+export interface Folder { // Nova interface Folder
+  id: number;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  conversations?: Conversation[]; // Opcional, dependendo se você carrega isso
 }
 
 export interface Message {

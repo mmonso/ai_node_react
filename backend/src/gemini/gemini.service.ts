@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Observable } from 'rxjs';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -28,32 +27,73 @@ export class GeminiService {
       }
 
       // Usar a URL correta da API Gemini conforme documentação atual
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
       const queryParams = `?key=${this.apiKey}`;
       
       // Verificar se alguma mensagem tem imagem
       const hasImage = messages.some(msg => msg.imageUrl);
       
+      // Obter data e hora atual formatadas
+      const now = new Date();
+      const formattedDate = now.toLocaleString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
+      
+      // Adicionar timestamp ao prompt do sistema
+      const enhancedSystemPrompt = `${systemPrompt}\nAgora é ${formattedDate}.`;
+      
       // Preparar o conteúdo para a API
       const parts = [];
       
+      // Preparar metadados para log e contexto
+      const metadata = {
+        timestamp: now.toISOString(),
+        model: "gemini-2.0-flash",
+        messages_count: messages.length
+      };
+      
+      // Adicionar metadados como comentário no prompt
+      parts.push({ text: `<!-- Metadata: ${JSON.stringify(metadata)} -->\n\n` });
+      
       // Adicionar o prompt do sistema como parte de texto
-      parts.push({ text: `${systemPrompt}\n\n` });
+      parts.push({ text: `${enhancedSystemPrompt}\n\n` });
       
       // Adicionar as mensagens anteriores como texto
       for (const msg of messages) {
         // Adicionar a mensagem de texto
         const role = msg.isUser ? 'Usuário' : 'Assistente';
-        parts.push({ text: `${role}: ${msg.content}\n` });
+        // Adicionar timestamp à mensagem
+        const msgTime = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR') : '';
+        const timestampStr = msgTime ? ` [${msgTime}]` : '';
+        
+        parts.push({ text: `${role}${timestampStr}: ${msg.content}\n` });
         
         // Se tiver imagem e for uma mensagem do usuário, adicionar a imagem
         if (msg.imageUrl && msg.isUser) {
           try {
+            // Log da URL da imagem
+            this.logger.debug(`Tentando processar imagem com URL: ${msg.imageUrl}`);
+            
             // Verificar se a imagem existe
+            // A URL é /uploads/nome-do-arquivo, precisamos pegar apenas o nome do arquivo
+            const imageName = msg.imageUrl.startsWith('/uploads/') 
+              ? msg.imageUrl.substring('/uploads/'.length) 
+              : path.basename(msg.imageUrl);
+              
+            this.logger.debug(`Nome do arquivo extraído: ${imageName}`);
+            
             const uploadDir = path.join(__dirname, '..', '..', 'uploads');
-            const imagePath = path.join(uploadDir, path.basename(msg.imageUrl));
+            const imagePath = path.join(uploadDir, imageName);
+            
+            this.logger.debug(`Caminho completo da imagem: ${imagePath}`);
             
             if (fs.existsSync(imagePath)) {
+              this.logger.debug(`Imagem encontrada no caminho: ${imagePath}`);
+              
               // Ler a imagem como base64
               const imageBuffer = fs.readFileSync(imagePath);
               const base64Image = imageBuffer.toString('base64');
@@ -66,6 +106,8 @@ export class GeminiService {
               else if (ext === '.gif') mimeType = 'image/gif';
               else if (ext === '.webp') mimeType = 'image/webp';
               
+              this.logger.debug(`Tipo MIME detectado: ${mimeType}, tamanho base64: ${base64Image.length}`);
+              
               // Adicionar imagem como parte da mensagem
               parts.push({
                 inline_data: {
@@ -74,9 +116,9 @@ export class GeminiService {
                 }
               });
               
-              this.logger.debug(`Imagem adicionada: ${imagePath}`);
+              this.logger.debug(`Imagem adicionada com sucesso à requisição`);
             } else {
-              this.logger.warn(`Imagem não encontrada: ${imagePath}`);
+              this.logger.warn(`Imagem não encontrada no caminho: ${imagePath}`);
             }
           } catch (error) {
             this.logger.error('Erro ao processar imagem:', error);
@@ -148,6 +190,15 @@ export class GeminiService {
           return `Estrutura de resposta inválida: ${JSON.stringify(candidate)}`;
         }
 
+        // Registrar informações de tokens e outras métricas
+        if (data.usageMetadata) {
+          this.logger.debug('Métricas de uso:', JSON.stringify({
+            prompt_tokens: data.usageMetadata.promptTokenCount,
+            response_tokens: data.usageMetadata.candidatesTokenCount,
+            total_tokens: data.usageMetadata.totalTokenCount
+          }));
+        }
+
         const finalResponseText = candidate.content.parts[0].text;
         this.logger.debug('Texto de resposta extraído com sucesso');
         return finalResponseText;
@@ -162,136 +213,65 @@ export class GeminiService {
     }
   }
 
-  generateResponseStream(messages: any[], systemPrompt: string): Observable<string> {
-    return new Observable<string>(observer => {
-      // Função assíncrona para lidar com o streaming
-      const processStream = async () => {
-        try {
-          this.logger.debug(`Iniciando stream com ${messages.length} mensagens e prompt do sistema`);
+  // Novo método para gerar títulos
+  async generateConversationTitle(firstUserMessage: string): Promise<string> {
+    this.logger.log(`Gerando título para a mensagem: "${firstUserMessage.substring(0, 50)}..."`);
+    try {
+      if (!this.apiKey) {
+        throw new Error('Chave API Gemini não configurada');
+      }
 
-          if (!this.apiKey) {
-            throw new Error('Chave API Gemini não configurada');
-          }
+      // Usar um modelo rápido e endpoint adequado para geração simples
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+      const queryParams = `?key=${this.apiKey}`;
 
-          // Endpoint para streaming
-          const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent';
-          const queryParams = `?key=${this.apiKey}&alt=sse`; // Usar Server-Sent Events
+      const prompt = `Gere um título curto e descritivo (máximo 5 palavras, sem aspas) para uma conversa de chat que começa com a seguinte mensagem do usuário:\n\n"${firstUserMessage}"\n\nTítulo:`;
 
-          // Preparar o conteúdo para a API no formato 'contents' esperado
-          const contents = [];
-
-          // Adicionar prompt do sistema (se houver) como primeiro turno do usuário ou instrução inicial
-          // A API Gemini geralmente lida melhor com o system prompt como parte do primeiro turno 'user'
-          // ou através de um campo 'systemInstruction' (se disponível e suportado pelo modelo/endpoint).
-          // Vamos integrá-lo ao primeiro turno do usuário por enquanto.
-          let firstUserMessageContent = systemPrompt ? `${systemPrompt}\n\n` : '';
-
-          for (const msg of messages) {
-            const role = msg.isUser ? 'user' : 'model';
-            let messageParts = [];
-
-            // Se for a primeira mensagem do usuário, adiciona o system prompt
-            if (role === 'user' && contents.length === 0) {
-               messageParts.push({ text: firstUserMessageContent + msg.content });
-               firstUserMessageContent = ''; // Limpa para não adicionar novamente
-            } else {
-               messageParts.push({ text: msg.content });
-            }
-
-            // TODO: Adicionar lógica de imagem se necessário para streaming
-            if (msg.imageUrl && msg.isUser) {
-               this.logger.warn('Processamento de imagem no streaming ainda não implementado.');
-               // A lógica de imagem precisaria ser adaptada aqui, adicionando a parte da imagem
-               // ao array messageParts. Ex: messageParts.push({ inline_data: { ... } });
-            }
-
-            contents.push({ role: role, parts: messageParts });
-          }
-
-          // Se o system prompt não foi adicionado a nenhuma mensagem de usuário (conversa vazia?)
-          // Isso não deveria acontecer no fluxo normal, mas por segurança:
-          if (firstUserMessageContent && contents.length === 0) {
-             contents.push({ role: 'user', parts: [{ text: firstUserMessageContent }] });
-          }
-
-          const requestBody = {
-            contents: contents, // Usar o array 'contents' formatado corretamente
-            generationConfig: {
-              temperature: 0.7,
-              topP: 0.95,
-              maxOutputTokens: 800,
-              topK: 40,
-            }
-          };
-          
-          this.logger.debug('URL da API Stream:', apiUrl + queryParams);
-          this.logger.debug('Request body Stream (resumido):', JSON.stringify(requestBody).substring(0, 500) + '...');
-
-          this.logger.debug('Iniciando fetch para API Stream...');
-          const response = await fetch(`${apiUrl}${queryParams}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          });
-
-          this.logger.debug(`Fetch para API Stream concluído. Status OK: ${response.ok}, Status: ${response.status}`);
-          if (!response.ok) {
-            const errorText = await response.text();
-            this.logger.error(`API Gemini Stream retornou status ${response.status}: ${errorText}`);
-            throw new Error(`Erro na API Gemini Stream (${response.status}): ${errorText}`);
-          }
-
-          if (!response.body) {
-            throw new Error('Resposta da API Stream não contém corpo (body)');
-          }
-
-          this.logger.debug('Iniciando processamento do stream SSE...');
-          // Processar o stream SSE
-          const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-
-          while (true) {
-            this.logger.debug('Lendo próximo chunk do stream...');
-            const { value, done } = await reader.read();
-            this.logger.debug(`Chunk lido. Done: ${done}, Value (início): ${value?.substring(0, 100)}`);
-            if (done) {
-              this.logger.debug('Stream Gemini finalizado.');
-              break; // Sai do loop quando o stream termina
-            }
-
-            // Processar eventos SSE (simplificado, pode precisar de mais robustez)
-            const lines = value.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const jsonData = JSON.parse(line.substring(6));
-                  if (jsonData.candidates && jsonData.candidates.length > 0) {
-                    const content = jsonData.candidates[0]?.content?.parts?.[0]?.text;
-                    if (content) {
-                      this.logger.debug(`Enviando chunk para observer: ${content}`);
-                      observer.next(content); // Envia o chunk de texto para o controller
-                    }
-                  }
-                } catch (e) {
-                  // Ignora linhas que não são JSON válido (ex: linhas vazias entre eventos)
-                  // this.logger.warn('Linha SSE não JSON ignorada:', line);
-                }
-              }
-            }
-          }
-          this.logger.debug('Completando observer do RxJS.');
-          observer.complete(); // Completa o observer do RxJS
-        } catch (error) {
-          this.logger.error('Erro durante o processamento do stream Gemini:', error);
-          observer.error(error); // Propaga o erro
-        }
+      const requestBody = {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.5, // Menos criativo para títulos
+          maxOutputTokens: 20, // Suficiente para um título curto
+          topP: 1,
+          topK: 1,
+        },
+        // Safety settings podem ser omitidos para tarefas simples como esta, ou usar padrões
       };
 
-      processStream(); // Inicia o processamento do stream
+      const response = await fetch(`${apiUrl}${queryParams}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
 
-      // Nota: Não há um mecanismo direto para cancelar o fetch aqui se o observer for desinscrito.
-      // Em um cenário de produção, pode ser necessário implementar lógica de cancelamento (AbortController).
-    });
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`API Gemini (gerar título) retornou status ${response.status}: ${errorText}`);
+        throw new Error(`Erro na API Gemini (${response.status})`);
+      }
+
+      const data = await response.json();
+
+      if (!data.candidates || !data.candidates.length || !data.candidates[0].content?.parts?.[0]?.text) {
+         this.logger.error('Resposta da API Gemini (gerar título) inválida:', JSON.stringify(data));
+         throw new Error('Resposta inválida da API Gemini');
+      }
+
+      let title = data.candidates[0].content.parts[0].text.trim();
+
+      // Remove aspas se a IA incluir
+      if (title.startsWith('"') && title.endsWith('"')) {
+        title = title.substring(1, title.length - 1);
+      }
+      
+      // Limita a um tamanho razoável caso a IA ignore o limite de palavras
+      title = title.split(' ').slice(0, 7).join(' ');
+
+      this.logger.log(`Título gerado: "${title}"`);
+      return title || 'Conversa Iniciada'; // Fallback
+    } catch (error) {
+      this.logger.error('Erro ao gerar título da conversa:', error);
+      return 'Nova Conversa'; // Retorna o padrão em caso de erro
+    }
   }
-} 
+}
