@@ -79,10 +79,29 @@ export class ConversationsService {
   async addBotMessage(conversationId: number, content: string): Promise<Message> {
     const conversation = await this.findOne(conversationId);
     
+    // Verifica se o conteúdo é uma resposta estruturada com metadados de embasamento
+    let messageContent = content;
+    let groundingMetadata = null;
+    
+    try {
+      // Tenta parsear o conteúdo como JSON para verificar se contém metadados
+      const parsedContent = JSON.parse(content);
+      
+      // Se for um objeto com text e groundingMetadata, extrair esses valores
+      if (parsedContent && parsedContent.text && parsedContent.groundingMetadata) {
+        messageContent = parsedContent.text;
+        groundingMetadata = JSON.stringify(parsedContent.groundingMetadata);
+      }
+    } catch (e) {
+      // Se não for JSON válido, usa o conteúdo original
+      messageContent = content;
+    }
+    
     const message = this.messagesRepository.create({
-      content,
+      content: messageContent,
       isUser: false,
-      conversation
+      conversation,
+      groundingMetadata
     });
     
     await this.messagesRepository.save(message);

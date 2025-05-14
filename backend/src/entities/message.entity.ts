@@ -21,6 +21,12 @@ export class Message {
   @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
   timestamp: Date;
 
+  @Column({ type: 'text', nullable: true })
+  groundingMetadata: string;
+
   @ManyToOne(() => Conversation, conversation => conversation.messages)
   conversation: Conversation;
+
+  @Column({ nullable: true })
+  conversationId: number;
 } 

@@ -17,6 +17,17 @@ Um chatbot moderno com uma arquitetura modular, usando a API Gemini (Google) com
 - React Router
 - React Markdown
 
+## Recursos Principais
+
+- **Chat avançado com IA**: Interface conversacional usando o modelo Gemini da Google
+- **Organização em pastas**: Organize suas conversas em pastas temáticas
+- **Suporte a imagens**: Envio e processamento de imagens para análise pelo modelo Gemini
+- **Upload de arquivos**: Anexe arquivos às suas conversas
+- **Grounding com Google Search**: Respostas baseadas em informações atualizadas da web, com citações e fontes
+- **Interface responsiva**: Funciona bem em dispositivos desktop e mobile
+- **Markdown completo**: Formatação avançada nas respostas, incluindo código, tabelas e mais
+- **Customização de prompts**: Configure o prompt do sistema para orientar as respostas do modelo
+
 ## Estrutura do Projeto
 
 O projeto está dividido em duas partes principais:
@@ -46,6 +57,7 @@ O projeto está dividido em duas partes principais:
 - Envio de imagens e arquivos como parte das mensagens
 - Prompt do sistema personalizável
 - Persistência de conversas e configurações em SQLite
+- Grounding com Google Search para informações atualizadas da web
 
 ## Configuração e Execução
 
@@ -80,6 +92,17 @@ npm start
 ```
 
 O aplicativo estará disponível em `http://localhost:3000`.
+
+## Sobre o Grounding com Google Search
+
+O aplicativo utiliza o recurso de Grounding com Google Search da API Gemini para fornecer respostas mais precisas e atualizadas. Esse recurso:
+
+- Conecta o modelo Gemini ao Google Search para consultar informações em tempo real
+- Fornece fontes e citações para cada pedaço de informação
+- Reduz significativamente "alucinações" (informações incorretas geradas pelo modelo)
+- Exibe sugestões de pesquisa relacionadas ao tópico
+
+Para usar o Grounding, basta ativar o botão "Pesquisa Web" ao enviar uma mensagem.
 
 ## Estrutura do Backend
 

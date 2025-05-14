@@ -177,11 +177,11 @@ const ChatPage: React.FC = () => {
     }
   };
   
-  const handleSendMessage = async (content: string, config: ModelConfig, file?: File) => {
+  const handleSendMessage = async (content: string, config: ModelConfig, file?: File, useWebSearch?: boolean) => {
     if (!id) return;
     
     // Verifica se é a primeira mensagem dessa conversa
-    const isFirstMessageInNewChat = conversation?.messages.length === 0;
+    const isFirstMessageInNewChat = conversation?.messages?.length === 0;
     
     // Cria uma mensagem temporária do usuário para exibição imediata
     let temporaryImageUrl = '';
@@ -205,11 +205,22 @@ const ChatPage: React.FC = () => {
       timestamp: new Date().toISOString(),
     };
     
-    setConversation(prevConversation => {
-      if (!prevConversation) return null;
+    setConversation((prevConversation) => {
+      if (!prevConversation) {
+        // Se de alguma forma for null, criar uma nova conversa com os valores mínimos
+        return {
+          id: conversation?.id || 0,
+          title: conversation?.title || 'Nova Conversa',
+          createdAt: conversation?.createdAt || new Date().toISOString(),
+          updatedAt: conversation?.updatedAt || new Date().toISOString(),
+          messages: [userMessage],
+          folderId: conversation?.folderId
+        };
+      }
+      
       return {
         ...prevConversation,
-        messages: [...prevConversation.messages, userMessage]
+        messages: [...(prevConversation.messages || []), userMessage]
       };
     });
     
@@ -218,7 +229,7 @@ const ChatPage: React.FC = () => {
     
     try {
       // Envia a mensagem e recebe a resposta do bot
-      const updatedMessages = await sendMessage(Number(id), content, file, modelConfig);
+      const updatedMessages = await sendMessage(Number(id), content, file, modelConfig, useWebSearch);
       
       // Log para depuração
       console.log('Mensagens recebidas do servidor:', updatedMessages);
@@ -229,7 +240,7 @@ const ChatPage: React.FC = () => {
         // A resposta do servidor deve conter todas as mensagens, incluindo a nova resposta do bot
         // Mas queremos preservar as URLs temporárias no cliente
         // Vamos verificar se temos a mensagem atual com imageUrl
-        const userMessageWithImage = conversation?.messages.find(msg => 
+        const userMessageWithImage = conversation?.messages?.find(msg =>
           msg.isUser && msg.imageUrl && msg.content === content
         );
         
@@ -256,12 +267,22 @@ const ChatPage: React.FC = () => {
         
         if (!botResponse.isUser) {
           // Adicione apenas a resposta do bot ao final, preservando as mensagens existentes
-          setConversation(prevConversation => {
-            if (!prevConversation) return null;
+          setConversation((prevConversation) => {
+            if (!prevConversation) {
+              // Se de alguma forma for null, criar uma nova conversa com os valores mínimos
+              return {
+                id: conversation?.id || 0,
+                title: conversation?.title || 'Nova Conversa',
+                createdAt: conversation?.createdAt || new Date().toISOString(),
+                updatedAt: conversation?.updatedAt || new Date().toISOString(),
+                messages: [botResponse],
+                folderId: conversation?.folderId
+              };
+            }
             
             return {
               ...prevConversation,
-              messages: [...prevConversation.messages, botResponse]
+              messages: [...(prevConversation.messages || []), botResponse]
             };
           });
         } else {
@@ -316,14 +337,14 @@ const ChatPage: React.FC = () => {
     <Layout>
       <ChatContainer>
         <MessagesContainer>
-          {conversation.messages.length === 0 ? (
+          {(conversation?.messages?.length === 0) ? (
             <EmptyState>
               Comece uma nova conversa enviando uma mensagem abaixo.
             </EmptyState>
           ) : (
             <>
               {/* Renderiza todas as mensagens existentes */}
-              {conversation.messages.map((message) => (
+              {conversation?.messages?.map((message) => (
                 <ChatMessage 
                   key={message.id} 
                   message={message}

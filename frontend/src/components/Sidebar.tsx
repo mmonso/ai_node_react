@@ -739,10 +739,18 @@ const Sidebar: React.FC = () => {
       try {
         await deleteFolder(folderId);
         setFolders(prevs => prevs.filter(f => f.id !== folderId));
-        setConversations(prevConvs => 
-          prevConvs.map(conv => 
-            conv.folderId === folderId ? { ...conv, folderId: null, folder: undefined } : conv // Use undefined for folder
-          )
+        setConversations(prevConvs =>
+          prevConvs.map(conv => {
+            if (conv.folderId === folderId) {
+              const updatedConv = { 
+                ...conv, 
+                folderId: null as number | null,
+                folder: undefined 
+              };
+              return updatedConv;
+            }
+            return conv;
+          })
         );
         setOpenFolderOptionsId(null);
         if(activeFolderId === folderId) {
@@ -765,8 +773,17 @@ const Sidebar: React.FC = () => {
       console.log(`Movendo conversa ${conversationId} para a pasta ${targetFolderId === null ? 'Conversas Soltas' : targetFolderId}`);
       
       // Primeiro, atualize a UI para uma experiência mais responsiva
-      setConversations(prevConvs => 
-        prevConvs.map(c => c.id === conversationId ? { ...c, folderId: targetFolderId } : c)
+      setConversations(prevConvs =>
+        prevConvs.map(c => {
+          if (c.id === conversationId) {
+            const updatedConv = { 
+              ...c, 
+              folderId: targetFolderId as number | null 
+            };
+            return updatedConv;
+          }
+          return c;
+        })
       );
       
       // Feche os menus

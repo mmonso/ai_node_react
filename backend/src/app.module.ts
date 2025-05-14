@@ -46,7 +46,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     GeminiModule,
     ConfigModule,
     UploadsModule,
-    FoldersModule, // Add FoldersModule to imports
+    FoldersModule,
   ],
   controllers: [],
   providers: [],

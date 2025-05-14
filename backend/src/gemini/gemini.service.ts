@@ -8,25 +8,82 @@ export class GeminiService {
   private apiKey: string;
   private readonly logger = new Logger(GeminiService.name);
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService
+  ) {
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!this.apiKey) {
       this.logger.warn('GEMINI_API_KEY não encontrada no arquivo .env. O serviço não funcionará corretamente.');
     } else {
       this.logger.log('Serviço Gemini inicializado com sucesso');
+      this.validateGroundingCapability();
     }
   }
 
-  async generateResponse(messages: any[], systemPrompt: string): Promise<string> {
+  private async validateGroundingCapability() {
     try {
-      this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema`);
+      this.logger.log('Validando se a chave API tem permissões para usar grounding...');
+      
+      // Usar a versão mais recente do modelo Gemini
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+      const queryParams = `?key=${this.apiKey}`;
+      
+      // Conteúdo para teste simples
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              { text: "Quem é o atual presidente do Brasil?" }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 100
+        },
+        // Ativar grounding para teste (formato correto para Gemini 2.0)
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      };
+      
+      // Fazer uma requisição de teste
+      const response = await fetch(`${apiUrl}${queryParams}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      // Verificar o status da resposta
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.warn(`Teste de grounding falhou! Status: ${response.status}. Motivo: ${errorText}`);
+        this.logger.warn('O recurso de grounding pode não funcionar corretamente. Verifique se sua chave API tem permissões adequadas e plano pago ativado.');
+      } else {
+        const data = await response.json();
+        if (data.candidates && data.candidates[0]?.groundingMetadata) {
+          this.logger.log('Teste de grounding bem-sucedido! A chave API tem permissões para usar o recurso de grounding.');
+        } else {
+          this.logger.warn('Teste de grounding parcialmente bem-sucedido. A API respondeu, mas não retornou metadados de grounding. O recurso pode não estar funcionando corretamente.');
+        }
+      }
+    } catch (error) {
+      this.logger.error('Erro ao validar recurso de grounding:', error);
+    }
+  }
+
+  async generateResponse(messages: any[], systemPrompt: string, useWebSearch: boolean = false): Promise<string> {
+    try {
+      this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema. Grounding: ${useWebSearch ? 'ativado' : 'desativado'}`);
       
       // Garantir que temos uma chave API
       if (!this.apiKey) {
         throw new Error('Chave API Gemini não configurada');
       }
 
-      // Usar a URL correta da API Gemini conforme documentação atual
+      // Usar a versão mais recente do modelo Gemini (verifique qual versão é a mais atual em ai.google.dev)
       const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
       const queryParams = `?key=${this.apiKey}`;
       
@@ -53,7 +110,8 @@ export class GeminiService {
       const metadata = {
         timestamp: now.toISOString(),
         model: "gemini-2.0-flash",
-        messages_count: messages.length
+        messages_count: messages.length,
+        grounding_used: useWebSearch,
       };
       
       // Adicionar metadados como comentário no prompt
@@ -129,8 +187,8 @@ export class GeminiService {
       // Adicionar a última solicitação (último turno)
       parts.push({ text: "Assistente: " });
       
-      // Criar o objeto de requisição
-      const requestBody = {
+      // Configuração base do request
+      const requestBody: any = {
         contents: [
           {
             parts: parts
@@ -142,9 +200,19 @@ export class GeminiService {
         }
       };
 
+      // Se o grounding estiver ativado, adicionar a ferramenta google_search para Gemini 2.0
+      if (useWebSearch) {
+        // Para Gemini 2.0, a ferramenta de pesquisa é googleSearch e não googleSearchRetrieval
+        requestBody.config = {
+          tools: [{ googleSearch: {} }]
+        };
+        this.logger.log('Grounding com Google Search ativado para esta solicitação');
+        this.logger.debug('Formato do requestBody com grounding:', JSON.stringify(requestBody.config));
+      }
+
       // Log da requisição para depuração
       this.logger.debug('URL da API:', apiUrl + queryParams);
-      this.logger.debug('Request body (resumido):', JSON.stringify(requestBody).substring(0, 500) + '...');
+      this.logger.debug('Request body (completo):', JSON.stringify(requestBody));
       
       try {
         const response = await fetch(`${apiUrl}${queryParams}`, {
@@ -199,9 +267,60 @@ export class GeminiService {
           }));
         }
 
-        const finalResponseText = candidate.content.parts[0].text;
-        this.logger.debug('Texto de resposta extraído com sucesso');
-        return finalResponseText;
+        // Verificar se temos metadados de embasamento (grounding)
+        if (useWebSearch) {
+          this.logger.log(`Verificando metadados de grounding na resposta. useWebSearch=${useWebSearch}, tem groundingMetadata=${!!candidate.groundingMetadata}`);
+        }
+        
+        if (useWebSearch && candidate.groundingMetadata) {
+          this.logger.log('Resposta contém metadados de grounding com Google Search');
+          this.logger.debug('Metadados de grounding:', JSON.stringify(candidate.groundingMetadata));
+          
+          // Extrair o texto da resposta
+          const finalResponseText = candidate.content.parts[0].text;
+          
+          try {
+            // Criar uma resposta estruturada que inclui o texto e os metadados de grounding
+            // Estrutura de acordo com a documentação do Gemini 2.0
+            const responseWithGrounding = JSON.stringify({
+              text: finalResponseText,
+              groundingMetadata: {
+                // Preservar o searchEntryPoint.renderedContent diretamente se disponível (contém o HTML das sugestões)
+                searchEntryPoint: candidate.groundingMetadata.searchEntryPoint || null,
+                
+                // Usar webSearchQueries diretamente conforme documentação
+                searchSuggestions: candidate.groundingMetadata.webSearchQueries || [],
+                
+                // Extrair as fontes do groundingChunks conforme documentação
+                sources: (candidate.groundingMetadata.groundingChunks || []).map(chunk => ({
+                  title: chunk.web?.title || 'Fonte',
+                  uri: chunk.web?.uri || '#'
+                })),
+                
+                // Citações e seus índices de groundingSupports
+                citations: (candidate.groundingMetadata.groundingSupports || []).map(support => ({
+                  text: support.segment?.text || '',
+                  startIndex: support.segment?.startIndex || 0,
+                  endIndex: support.segment?.endIndex || 0,
+                  sources: support.groundingChunkIndices?.map(index => index) || [],
+                  confidence: Array.isArray(support.confidenceScores) ? 
+                              Math.max(...support.confidenceScores) : 
+                              (support.confidence || 0)
+                }))
+              }
+            });
+            
+            return responseWithGrounding;
+          } catch (error) {
+            this.logger.error('Erro ao processar metadados de grounding:', error);
+            return finalResponseText;
+          }
+        } else {
+          // Resposta normal sem embasamento
+          const finalResponseText = candidate.content.parts[0].text;
+          this.logger.debug('Texto de resposta extraído com sucesso');
+          return finalResponseText;
+        }
       } catch (fetchError) {
         this.logger.error('Erro durante a requisição fetch:', fetchError);
         return `Erro de rede: ${fetchError.message}`;
@@ -213,7 +332,7 @@ export class GeminiService {
     }
   }
 
-  // Novo método para gerar títulos
+  // Método para gerar títulos
   async generateConversationTitle(firstUserMessage: string): Promise<string> {
     this.logger.log(`Gerando título para a mensagem: "${firstUserMessage.substring(0, 50)}..."`);
     try {
@@ -221,57 +340,51 @@ export class GeminiService {
         throw new Error('Chave API Gemini não configurada');
       }
 
-      // Usar um modelo rápido e endpoint adequado para geração simples
       const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
       const queryParams = `?key=${this.apiKey}`;
 
-      const prompt = `Gere um título curto e descritivo (máximo 5 palavras, sem aspas) para uma conversa de chat que começa com a seguinte mensagem do usuário:\n\n"${firstUserMessage}"\n\nTítulo:`;
+      const prompt = `Por favor, crie um título curto e descritivo (máximo 5 palavras) para uma conversa que começa com esta mensagem: "${firstUserMessage}"`;
 
       const requestBody = {
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ],
         generationConfig: {
-          temperature: 0.5, // Menos criativo para títulos
-          maxOutputTokens: 20, // Suficiente para um título curto
-          topP: 1,
-          topK: 1,
-        },
-        // Safety settings podem ser omitidos para tarefas simples como esta, ou usar padrões
+          temperature: 0.2,
+          maxOutputTokens: 30
+        }
       };
 
       const response = await fetch(`${apiUrl}${queryParams}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error(`API Gemini (gerar título) retornou status ${response.status}: ${errorText}`);
-        throw new Error(`Erro na API Gemini (${response.status})`);
+        this.logger.error(`API Gemini retornou status ${response.status} ao gerar título: ${errorText}`);
+        return 'Nova Conversa';
       }
 
       const data = await response.json();
-
-      if (!data.candidates || !data.candidates.length || !data.candidates[0].content?.parts?.[0]?.text) {
-         this.logger.error('Resposta da API Gemini (gerar título) inválida:', JSON.stringify(data));
-         throw new Error('Resposta inválida da API Gemini');
+      if (!data.candidates || !data.candidates.length || !data.candidates[0].content.parts.length) {
+        this.logger.error('Resposta da API Gemini não contém candidatos ao gerar título');
+        return 'Nova Conversa';
       }
 
-      let title = data.candidates[0].content.parts[0].text.trim();
-
-      // Remove aspas se a IA incluir
-      if (title.startsWith('"') && title.endsWith('"')) {
-        title = title.substring(1, title.length - 1);
-      }
-      
-      // Limita a um tamanho razoável caso a IA ignore o limite de palavras
-      title = title.split(' ').slice(0, 7).join(' ');
-
-      this.logger.log(`Título gerado: "${title}"`);
-      return title || 'Conversa Iniciada'; // Fallback
+      const title = data.candidates[0].content.parts[0].text.trim();
+      // Remover aspas se presentes (às vezes o modelo inclui aspas)
+      return title.replace(/^["']|["']$/g, '');
     } catch (error) {
-      this.logger.error('Erro ao gerar título da conversa:', error);
-      return 'Nova Conversa'; // Retorna o padrão em caso de erro
+      this.logger.error('Erro ao gerar título:', error);
+      return 'Nova Conversa';
     }
   }
 }

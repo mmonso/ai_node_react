@@ -61,7 +61,8 @@ export const sendMessage = async (
   conversationId: number, 
   content: string, 
   file?: File,
-  modelConfig?: ModelConfig
+  modelConfig?: ModelConfig,
+  useWebSearch: boolean = false
 ): Promise<Message[]> => {
   const formData = new FormData();
   formData.append('content', content);
@@ -76,7 +77,7 @@ export const sendMessage = async (
   }
   
   const response = await axios.post(
-    `${API_URL}/conversations/${conversationId}/messages`, 
+    `${API_URL}/conversations/${conversationId}/messages?web_search=${useWebSearch}`, 
     formData,
     {
       headers: {

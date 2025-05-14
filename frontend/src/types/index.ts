@@ -4,26 +4,43 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   messages: Message[];
-  folderId?: number | null; // Adicionado para referência à pasta
-  folder?: Folder | null;    // Adicionado para dados da pasta, se carregados
+  folderId?: number | null;
+  folder?: Folder | null;
 }
 
-export interface Folder { // Nova interface Folder
+export interface Folder {
   id: number;
   name: string;
   createdAt: string;
   updatedAt: string;
-  conversations?: Conversation[]; // Opcional, dependendo se você carrega isso
+  conversations?: Conversation[];
 }
 
 export interface Message {
-  id: number;
+  id?: number;
   conversationId: number;
   content: string;
   isUser: boolean;
   timestamp: string;
   imageUrl?: string;
   fileUrl?: string;
+  fileName?: string;
+  groundingMetadata?: GroundingMetadata;
+}
+
+export interface GroundingMetadata {
+  sources?: Array<{
+    title: string;
+    uri: string;
+  }>;
+  searchSuggestions?: string[];
+  citations?: Array<{
+    text: string;
+    startIndex: number;
+    endIndex: number;
+    sources: number[];
+    confidence: number;
+  }>;
 }
 
 export interface Config {
@@ -32,12 +49,20 @@ export interface Config {
 
 export interface ModelConfig {
   temperature: number;
-  maxOutputTokens: number;
   topP: number;
   topK: number;
+  maxOutputTokens: number;
+}
+
+export interface ProgressMessage {
+  type: 'start' | 'progress' | 'complete' | 'error';
+  message?: string;
+  progress?: number;
 }
 
 export interface FileResponse {
-  uri: string;
-  mimeType: string;
+  url: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
 } 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus } from '@nestjs/common'; // Added ParseIntPipe, HttpCode, HttpStatus
+import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus, ParseBoolPipe, DefaultValuePipe } from '@nestjs/common'; // Added ParseBoolPipe, DefaultValuePipe
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConversationsService } from './conversations.service';
 import { Conversation } from '../entities/conversation.entity';
@@ -73,10 +73,14 @@ export class ConversationsController {
   async addMessage(
     @Param('id') id: number,
     @Body() body: { content: string },
+    @Query('web_search', new DefaultValuePipe(false), ParseBoolPipe) useWebSearch: boolean,
     @UploadedFile() file?: Express.Multer.File,
   ): Promise<Message[]> {
     let imageUrl;
     let fileUrl;
+    
+    // Log da solicitação com o parâmetro de busca na web
+    this.logger.log(`Recebida nova mensagem para conversa ${id}. Busca na web: ${useWebSearch ? 'ativada' : 'desativada'}`);
     
     if (file) {
       this.logger.log(`Arquivo recebido: ${JSON.stringify({
@@ -155,8 +159,12 @@ export class ConversationsController {
     }
     
     // Gera a resposta do Gemini
-    this.logger.log(`Gerando resposta para conversa ${id}...`);
-    const botResponse = await this.geminiService.generateResponse(conversation.messages, systemPrompt);
+    this.logger.log(`Gerando resposta para conversa ${id}${useWebSearch ? ' com busca na web' : ''}...`);
+    const botResponse = await this.geminiService.generateResponse(
+      conversation.messages, 
+      systemPrompt,
+      useWebSearch
+    );
     
     // Salva a resposta do bot
     await this.conversationsService.addBotMessage(id, botResponse);

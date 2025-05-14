@@ -11,17 +11,171 @@ import { Message } from '../types';
 // URL base do backend para acessar arquivos
 const BASE_URL = 'http://localhost:3001';
 
+interface GroundingMetadata {
+  sources?: Array<{
+    title: string;
+    uri: string;
+  }>;
+  searchSuggestions?: string[];
+  citations?: Array<{
+    text: string;
+    startIndex: number;
+    endIndex: number;
+    sources: number[];
+    confidence: number;
+  }>;
+  searchEntryPoint?: {
+    renderedContent: string;
+  };
+}
+
 interface ChatMessageProps {
   message: Message;
   isTyping?: boolean;
 }
+
+// Adicione este componente para exibir as sugestões de pesquisa Google
+const SearchSuggestions = styled.div`
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--input-background, #f5f5f5);
+  font-size: 0.9rem;
+  color: var(--secondary-text, #666);
+`;
+
+const SearchChip = styled.a`
+  display: inline-block;
+  margin: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background-color: var(--background);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: var(--hover-color);
+    text-decoration: none;
+  }
+`;
+
+const SearchIcon = styled.span`
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+`;
+
+// Componente para exibir os metadados de grounding com Google Search
+const GroundingSources: React.FC<{ groundingMetadata: GroundingMetadata }> = ({ groundingMetadata }) => {
+  if (!groundingMetadata || (!groundingMetadata.sources && !groundingMetadata.searchSuggestions)) {
+    return null;
+  }
+
+  // Renderiza o HTML fornecido pelo searchEntryPoint se disponível
+  const renderSearchEntryPoint = () => {
+    if (groundingMetadata.searchEntryPoint?.renderedContent) {
+      // É OBRIGATÓRIO usar o HTML e CSS fornecidos pelo Google sem modificações
+      return (
+        <div 
+          dangerouslySetInnerHTML={{ 
+            __html: groundingMetadata.searchEntryPoint.renderedContent 
+          }} 
+          style={{ 
+            marginTop: '8px', 
+            width: '100%',  // Garante largura total, conforme obrigatório nas diretrizes
+            minWidth: '100%'
+          }}
+        />
+      );
+    }
+    
+    // Fallback para renderizar as sugestões manualmente se não tiver o HTML pronto
+    // Isso deve seguir EXATAMENTE as diretrizes de aparência do Google
+    if (groundingMetadata.searchSuggestions && groundingMetadata.searchSuggestions.length > 0) {
+      return (
+        <SearchSuggestions>
+          <SearchIcon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+              <circle cx="24" cy="23" fill="#FFF" r="22"/>
+              <path d="M33.76 34.26c2.75-2.56 4.49-6.37 4.49-11.26 0-.89-.08-1.84-.29-3H24.01v5.99h8.03c-.4 2.02-1.5 3.56-3.07 4.56v.75l3.91 2.97h.88z" fill="#4285F4"/>
+              <path d="M15.58 25.77A8.845 8.845 0 0 0 24 31.86c1.92 0 3.62-.46 4.97-1.31l4.79 3.71C31.14 36.7 27.65 38 24 38c-5.93 0-11.01-3.4-13.45-8.36l.17-1.01 4.06-2.85h.8z" fill="#34A853"/>
+              <path d="M15.59 20.21a8.864 8.864 0 0 0 0 5.58l-5.03 3.86c-.98-2-1.53-4.25-1.53-6.64 0-2.39.55-4.64 1.53-6.64l1-.22 3.81 2.98.22 1.08z" fill="#FBBC05"/>
+              <path d="M24 14.14c2.11 0 4.02.75 5.52 1.98l4.36-4.36C31.22 9.43 27.81 8 24 8c-5.93 0-11.01 3.4-13.45 8.36l5.03 3.85A8.86 8.86 0 0 1 24 14.14z" fill="#EA4335"/>
+            </svg>
+          </SearchIcon>
+          {groundingMetadata.searchSuggestions.map((suggestion, index) => (
+            <SearchChip 
+              key={index} 
+              href={`https://www.google.com/search?q=${encodeURIComponent(suggestion)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {suggestion}
+            </SearchChip>
+          ))}
+        </SearchSuggestions>
+      );
+    }
+    
+    return null;
+  };
+
+  return (
+    <GroundingContainer>
+      {/* Primeiro renderize as sugestões de pesquisa (obrigatório por contrato) */}
+      {renderSearchEntryPoint()}
+      
+      {/* Depois exibe as fontes, se houver */}
+      {groundingMetadata.sources && groundingMetadata.sources.length > 0 && (
+        <GroundingSection>
+          <GroundingTitle>Fontes:</GroundingTitle>
+          <SourcesList>
+            {groundingMetadata.sources.map((source, index) => (
+              <SourceItem key={index}>
+                <SourceLink href={source.uri} target="_blank" rel="noopener noreferrer">
+                  {source.title || source.uri}
+                </SourceLink>
+              </SourceItem>
+            ))}
+          </SourcesList>
+        </GroundingSection>
+      )}
+    </GroundingContainer>
+  );
+};
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false }) => {
   const { theme } = useTheme();
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
   const [imageError, setImageError] = useState(false);
   const [imageUrl, setImageUrl] = useState(message.imageUrl || '');
+  const [groundingMetadata, setGroundingMetadata] = useState<GroundingMetadata | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  // Parse grounding metadata if available
+  useEffect(() => {
+    if (message.content) {
+      try {
+        // Tentar fazer parse da mensagem como JSON
+        // Em vez de usar regex, vamos verificar se começa e termina com chaves
+        if (message.content.trim().startsWith('{') && message.content.trim().endsWith('}')) {
+          const parsedData = JSON.parse(message.content);
+          if (parsedData.text && parsedData.groundingMetadata) {
+            // Se tiver metadados de grounding, extrair o texto e os metadados
+            setGroundingMetadata(parsedData.groundingMetadata);
+            // Atualizar a mensagem para mostrar apenas o texto
+            message.content = parsedData.text;
+          }
+        }
+      } catch (e) {
+        // Não é um JSON válido, manter o conteúdo original
+        console.log('Não é um JSON de grounding:', e);
+      }
+    }
+  }, [message.content]);
 
   // Log when image URL is present
   useEffect(() => {
@@ -184,6 +338,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false }) 
                 <FileType>Arquivo Anexado</FileType>
               </FileInfo>
             </FileCard>
+          )}
+          
+          {/* Componente para mostrar fontes do grounding */}
+          {groundingMetadata && !message.isUser && (
+            <GroundingSources groundingMetadata={groundingMetadata} />
           )}
         </MessageText>
       </MessageContent>
@@ -472,6 +631,50 @@ const ImageErrorContainer = styled.div`
   
   span {
     font-size: 0.9rem;
+  }
+`;
+
+// Estilos para o grounding
+const GroundingContainer = styled.div`
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+`;
+
+const GroundingSection = styled.div`
+  margin-bottom: 0.75rem;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const GroundingTitle = styled.h4`
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-text);
+`;
+
+const SourcesList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`;
+
+const SourceItem = styled.li`
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+`;
+
+const SourceLink = styled.a`
+  color: var(--accent-color);
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
   }
 `;
 
