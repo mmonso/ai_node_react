@@ -42,9 +42,7 @@ export class GeminiService {
           maxOutputTokens: 100
         },
         // Ativar grounding para teste (formato correto para Gemini 2.0)
-        config: {
-          tools: [{ googleSearch: {} }]
-        }
+        tools: [{ googleSearch: {} }]
       };
       
       // Fazer uma requisição de teste
@@ -202,12 +200,10 @@ export class GeminiService {
 
       // Se o grounding estiver ativado, adicionar a ferramenta google_search para Gemini 2.0
       if (useWebSearch) {
-        // Para Gemini 2.0, a ferramenta de pesquisa é googleSearch e não googleSearchRetrieval
-        requestBody.config = {
-          tools: [{ googleSearch: {} }]
-        };
+        // Para Gemini 2.0, a ferramenta de pesquisa é googleSearch
+        requestBody.tools = [{ googleSearch: {} }];
         this.logger.log('Grounding com Google Search ativado para esta solicitação');
-        this.logger.debug('Formato do requestBody com grounding:', JSON.stringify(requestBody.config));
+        this.logger.debug('Formato do requestBody com grounding:', JSON.stringify(requestBody.tools));
       }
 
       // Log da requisição para depuração
