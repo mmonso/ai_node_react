@@ -8,13 +8,16 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ConversationsModule } from './conversations/conversations.module';
 import { GeminiModule } from './gemini/gemini.module';
+import { OpenAIModule } from './openai/openai.module'; // Importar OpenAIModule
 import { ConfigModule } from './config/config.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { FoldersModule } from './folders/folders.module'; // Import FoldersModule
+import { ModelsModule } from './models/models.module'; // Import ModelsModule
 import { Conversation } from './entities/conversation.entity';
 import { Message } from './entities/message.entity';
 import { Config } from './entities/config.entity';
 import { Folder } from './entities/folder.entity'; // Import Folder entity
+import { Model } from './entities/model.entity'; // Import Model entity
 import { ServeStaticModule } from '@nestjs/serve-static';
 
 @Module({
@@ -25,7 +28,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: join(__dirname, '..', 'data', 'chat.sqlite'),
-      entities: [Conversation, Message, Config, Folder], // Add Folder to entities
+      entities: [Conversation, Message, Config, Folder, Model], // Add Model to entities
       synchronize: true, // Be cautious with synchronize: true in production
     }),
     ServeStaticModule.forRoot({
@@ -44,9 +47,11 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     }),
     ConversationsModule,
     GeminiModule,
+    OpenAIModule, // Adicionar o módulo OpenAI
     ConfigModule,
     UploadsModule,
     FoldersModule,
+    ModelsModule, // Add ModelsModule
   ],
   controllers: [],
   providers: [],

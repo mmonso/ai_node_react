@@ -8,14 +8,17 @@ import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
-import { Folder } from '../entities/folder.entity'; // Added Folder import
+import { Folder } from '../entities/folder.entity';
+import { Model } from '../entities/model.entity';
 import { GeminiModule } from '../gemini/gemini.module';
+import { OpenAIModule } from '../openai/openai.module';
 import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Conversation, Message, Folder]), // Added Folder here
+    TypeOrmModule.forFeature([Conversation, Message, Folder, Model]),
     GeminiModule,
+    OpenAIModule,
     ConfigModule,
     MulterModule.register({
       storage: diskStorage({

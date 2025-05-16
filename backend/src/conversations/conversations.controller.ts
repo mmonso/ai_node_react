@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus, ParseBoolPipe, DefaultValuePipe } from '@nestjs/common'; // Added ParseBoolPipe, DefaultValuePipe
+import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus, ParseBoolPipe, DefaultValuePipe, Patch } from '@nestjs/common'; // Added Patch
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConversationsService } from './conversations.service';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { GeminiService } from '../gemini/gemini.service';
+import { OpenAIService } from '../openai/openai.service';
 import { ConfigService } from '../config/config.service';
 import * as path from 'path';
 
@@ -14,6 +15,7 @@ export class ConversationsController {
   constructor(
     private conversationsService: ConversationsService,
     private geminiService: GeminiService,
+    private openaiService: OpenAIService,
     private configService: ConfigService,
   ) {}
 
@@ -28,8 +30,8 @@ export class ConversationsController {
   }
 
   @Post()
-  create(@Body() body: { title: string }): Promise<Conversation> {
-    return this.conversationsService.create(body.title);
+  create(@Body() body: { title: string; modelId?: number }): Promise<Conversation> {
+    return this.conversationsService.create(body.title, body.modelId);
   }
 
   @Put(':id')
@@ -66,21 +68,48 @@ export class ConversationsController {
     return this.conversationsService.removeConversationFromFolder(conversationId);
   }
 
+  // --- Rotas para Modelo ---
+  
+  @Patch(':conversationId/model')
+  @HttpCode(HttpStatus.OK)
+  updateConversationModel(
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Body() body: { modelId: number; modelConfig?: any },
+  ): Promise<Conversation> {
+    this.logger.log(`Atualizando modelo da conversa ${conversationId} para ${body.modelId}`);
+    return this.conversationsService.updateConversationModel(
+      conversationId,
+      body.modelId,
+      body.modelConfig,
+    );
+  }
+
   // --- Rota de Mensagens ---
  
   @Post(':id/messages')
   @UseInterceptors(FileInterceptor('file'))
   async addMessage(
     @Param('id') id: number,
-    @Body() body: { content: string },
+    @Body() body: { content: string; modelConfig?: string },
     @Query('web_search', new DefaultValuePipe(false), ParseBoolPipe) useWebSearch: boolean,
     @UploadedFile() file?: Express.Multer.File,
   ): Promise<Message[]> {
     let imageUrl;
     let fileUrl;
+    let modelConfig = null;
     
     // Log da solicitação com o parâmetro de busca na web
     this.logger.log(`Recebida nova mensagem para conversa ${id}. Busca na web: ${useWebSearch ? 'ativada' : 'desativada'}`);
+    
+    // Processar a configuração do modelo, se fornecida
+    if (body.modelConfig) {
+      try {
+        modelConfig = JSON.parse(body.modelConfig);
+        this.logger.log(`Configuração do modelo recebida: ${JSON.stringify(modelConfig)}`);
+      } catch (e) {
+        this.logger.error(`Erro ao processar configuração do modelo: ${e.message}`);
+      }
+    }
     
     if (file) {
       this.logger.log(`Arquivo recebido: ${JSON.stringify({
@@ -142,8 +171,16 @@ export class ConversationsController {
     if (conversation.title === 'Nova Conversa' && conversation.messages.length === 1) {
       this.logger.log(`Conversa "${conversation.title}" (${id}) detectada. Tentando gerar novo título...`);
       
-      // Gerar e atualizar título em background (não bloquear a resposta)
-      this.geminiService.generateConversationTitle(body.content)
+      // Gerar e atualizar título em background usando o provedor correto
+      let titlePromise;
+      
+      if (conversation.model && conversation.model.provider === 'openai') {
+        titlePromise = this.openaiService.generateConversationTitle(body.content);
+      } else {
+        titlePromise = this.geminiService.generateConversationTitle(body.content);
+      }
+      
+      titlePromise
         .then(newTitle => {
           if (newTitle && newTitle !== 'Nova Conversa') {
             this.logger.log(`Novo título gerado para conversa ${id}: "${newTitle}". Atualizando...`);
@@ -158,13 +195,36 @@ export class ConversationsController {
         });
     }
     
-    // Gera a resposta do Gemini
+    // Se existe uma configuração personalizada do modelo para esta requisição,
+    // atualiza a conversa com esta configuração temporariamente
+    if (modelConfig) {
+      await this.conversationsService.updateModelConfig(id, modelConfig);
+    }
+    
+    // Gera a resposta do modelo apropriado
     this.logger.log(`Gerando resposta para conversa ${id}${useWebSearch ? ' com busca na web' : ''}...`);
-    const botResponse = await this.geminiService.generateResponse(
-      conversation.messages, 
-      systemPrompt,
-      useWebSearch
-    );
+    
+    let botResponse;
+    
+    if (conversation.model && conversation.model.provider === 'openai') {
+      // Usar o serviço OpenAI
+      botResponse = await this.openaiService.generateResponse(
+        conversation.messages, 
+        systemPrompt,
+        useWebSearch,
+        conversation.model,
+        conversation.modelConfig || modelConfig
+      );
+    } else {
+      // Usar o serviço Gemini (padrão)
+      botResponse = await this.geminiService.generateResponse(
+        conversation.messages, 
+        systemPrompt,
+        useWebSearch,
+        conversation.model,
+        conversation.modelConfig || modelConfig
+      );
+    }
     
     // Salva a resposta do bot
     await this.conversationsService.addBotMessage(id, botResponse);

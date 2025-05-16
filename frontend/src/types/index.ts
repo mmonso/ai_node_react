@@ -6,6 +6,9 @@ export interface Conversation {
   messages: Message[];
   folderId?: number | null;
   folder?: Folder | null;
+  modelId?: number | null;
+  model?: Model | null;
+  modelConfig?: ModelConfig | null;
 }
 
 export interface Folder {
@@ -47,10 +50,27 @@ export interface Config {
   systemPrompt: string;
 }
 
+export interface Model {
+  id: number;
+  provider: string;
+  name: string;
+  label: string;
+  isAvailable: boolean;
+  capabilities: {
+    textInput: boolean;
+    imageInput: boolean;
+    fileInput: boolean;
+    webSearch: boolean;
+  };
+  defaultConfig: ModelConfig;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ModelConfig {
   temperature: number;
-  topP: number;
-  topK: number;
+  topP?: number;
+  topK?: number;
   maxOutputTokens: number;
 }
 

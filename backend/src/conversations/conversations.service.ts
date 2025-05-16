@@ -4,7 +4,9 @@ import { Repository } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { Folder } from '../entities/folder.entity'; // Added Folder import
+import { Model } from '../entities/model.entity'; // Added Model import
 import { GeminiService } from '../gemini/gemini.service';
+import { OpenAIService } from '../openai/openai.service'; // Adicionar o serviço OpenAI
 import { ConfigService } from '../config/config.service';
 
 @Injectable()
@@ -15,9 +17,12 @@ export class ConversationsService {
     @InjectRepository(Message)
     private messagesRepository: Repository<Message>,
     private geminiService: GeminiService,
+    private openaiService: OpenAIService, // Injetar o serviço OpenAI
     private configService: ConfigService,
     @InjectRepository(Folder) // Inject Folder repository
     private foldersRepository: Repository<Folder>,
+    @InjectRepository(Model) // Inject Model repository
+    private modelsRepository: Repository<Model>,
   ) {}
  
   async findAll(): Promise<Conversation[]> {
@@ -29,13 +34,23 @@ export class ConversationsService {
   async findOne(id: number): Promise<Conversation> {
     return this.conversationsRepository.findOne({
       where: { id },
-      relations: ['messages'],
+      relations: ['messages', 'model'],
       order: { messages: { timestamp: 'ASC' } },
     });
   }
 
-  async create(title: string): Promise<Conversation> {
+  async create(title: string, modelId?: number): Promise<Conversation> {
     const conversation = this.conversationsRepository.create({ title });
+    
+    if (modelId) {
+      const model = await this.modelsRepository.findOneBy({ id: modelId });
+      if (model) {
+        conversation.modelId = modelId;
+        conversation.model = model;
+        conversation.modelConfig = model.defaultConfig;
+      }
+    }
+    
     return this.conversationsRepository.save(conversation);
   }
 
@@ -117,17 +132,35 @@ export class ConversationsService {
     const systemPrompt = await this.configService.getSystemPrompt();
     
     try {
-      const response = await this.geminiService.generateResponse(
-        messages,
-        systemPrompt
-      );
+      let response;
+      
+      // Verificar qual provedor de IA usar com base no modelo selecionado
+      if (conversation.model && conversation.model.provider === 'openai') {
+        // Usar o serviço OpenAI
+        response = await this.openaiService.generateResponse(
+          messages,
+          systemPrompt,
+          false,
+          conversation.model,
+          conversation.modelConfig
+        );
+      } else {
+        // Usar o serviço Gemini (padrão)
+        response = await this.geminiService.generateResponse(
+          messages,
+          systemPrompt,
+          false,
+          conversation.model,
+          conversation.modelConfig
+        );
+      }
       
       return this.addBotMessage(conversationId, response);
     } catch (error) {
       // Se ocorrer um erro, cria uma mensagem de erro para não quebrar a conversa
       return this.addBotMessage(
         conversationId, 
-        `Erro ao gerar resposta: ${error.message || 'Falha na comunicação com a API Gemini'}`
+        `Erro ao gerar resposta: ${error.message || 'Falha na comunicação com a API'}`
       );
     }
   }
@@ -160,6 +193,45 @@ export class ConversationsService {
     conversation.folderId = null; // Define como null para remover da pasta
     conversation.updatedAt = new Date(); // Atualiza timestamp
 
+    return this.conversationsRepository.save(conversation);
+  }
+  
+  // --- Métodos para Modelos ---
+  
+  async updateConversationModel(conversationId: number, modelId: number, modelConfig?: any): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+    if (!conversation) {
+      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
+    }
+    
+    const model = await this.modelsRepository.findOneBy({ id: modelId });
+    if (!model) {
+      throw new NotFoundException(`Modelo com ID ${modelId} não encontrado.`);
+    }
+    
+    conversation.modelId = modelId;
+    
+    // Se não foi fornecida uma configuração personalizada, usar a padrão do modelo
+    if (!modelConfig) {
+      conversation.modelConfig = model.defaultConfig;
+    } else {
+      conversation.modelConfig = modelConfig;
+    }
+    
+    conversation.updatedAt = new Date();
+    
+    return this.conversationsRepository.save(conversation);
+  }
+  
+  async updateModelConfig(conversationId: number, modelConfig: any): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+    if (!conversation) {
+      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
+    }
+    
+    conversation.modelConfig = modelConfig;
+    conversation.updatedAt = new Date();
+    
     return this.conversationsRepository.save(conversation);
   }
 }

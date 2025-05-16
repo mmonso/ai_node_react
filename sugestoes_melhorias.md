@@ -1,19 +1,8 @@
 # Sugestões de Melhorias - Projeto Gemini Chatbot
 
-## Implementações Recentes
-
-1. **Grounding Nativo com Google Search**
-   - Implementado o grounding nativo do Gemini API com Google Search para respostas mais precisas e atualizadas
-   - Adicionado suporte para exibição de fontes, citações e sugestões de pesquisa no frontend
-   - Removido o módulo manual de web-search, utilizando agora a funcionalidade oficial da API
-
-## Novas Funcionalidades para Implementar
-
 1. **Edição de Conversas**
    - Funcionalidade para editar mensagens do usuário após terem sido enviadas
    - Possibilidade de editar ou regenerar respostas do assistente
-   - Sistema de versionamento para acompanhar alterações feitas em conversas
-   - Opção para marcar versões específicas como favoritas
 
 2. **Histórico de Prompts do Sistema**
    - Sistema para salvar e recuperar prompts do sistema favoritos

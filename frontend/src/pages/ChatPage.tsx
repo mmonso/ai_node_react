@@ -74,7 +74,7 @@ const ChatPage: React.FC = () => {
   });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { triggerReload } = useAppContext(); 
+  const { reloadTrigger, triggerReload } = useAppContext(); 
 
   // Efeito para limpar o timer quando o componente é desmontado
   useEffect(() => {
@@ -124,8 +124,8 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     if (id) {
       loadConversation();
-        }
-  }, [id]);
+    }
+  }, [id, reloadTrigger]);
   
   useEffect(() => {
     scrollToBottom();
@@ -168,6 +168,12 @@ const ChatPage: React.FC = () => {
       }
       
       setConversation(data);
+      
+      // Atualizar o modelo config com o da conversa se estiver disponível
+      if (data.modelConfig) {
+        setModelConfig(data.modelConfig);
+      }
+      
       setError('');
     } catch (err: any) {
       setError(`Erro ao carregar conversa: ${err.message}`);
@@ -317,8 +323,27 @@ const ChatPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Layout>
-        <LoadingIndicator>Carregando conversa...</LoadingIndicator>
+      <Layout 
+        currentModelId={conversation?.modelId || null}
+        currentModelConfig={conversation?.modelConfig || null}
+      >
+        <LoadingIndicator>
+          <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+            <circle cx="12" cy="6" r="2" fill="currentColor">
+              <animateTransform
+                attributeName="transform"
+                attributeType="XML"
+                type="rotate"
+                from="0 12 12"
+                to="360 12 12"
+                dur="1s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
+          <span style={{ marginLeft: '10px' }}>Carregando conversa...</span>
+        </LoadingIndicator>
       </Layout>
     );
   }
@@ -334,7 +359,10 @@ const ChatPage: React.FC = () => {
   }
   
   return (
-    <Layout>
+    <Layout 
+      currentModelId={conversation?.modelId || null}
+      currentModelConfig={conversation?.modelConfig || null}
+    >
       <ChatContainer>
         <MessagesContainer>
           {(conversation?.messages?.length === 0) ? (

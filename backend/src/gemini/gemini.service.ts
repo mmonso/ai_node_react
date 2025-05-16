@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Model } from '../entities/model.entity';
 
 @Injectable()
 export class GeminiService {
@@ -72,7 +73,13 @@ export class GeminiService {
     }
   }
 
-  async generateResponse(messages: any[], systemPrompt: string, useWebSearch: boolean = false): Promise<string> {
+  async generateResponse(
+    messages: any[], 
+    systemPrompt: string, 
+    useWebSearch: boolean = false,
+    model?: Model,
+    modelConfig?: any
+  ): Promise<string> {
     try {
       this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema. Grounding: ${useWebSearch ? 'ativado' : 'desativado'}`);
       
@@ -81,8 +88,37 @@ export class GeminiService {
         throw new Error('Chave API Gemini não configurada');
       }
 
-      // Usar a versão mais recente do modelo Gemini (verifique qual versão é a mais atual em ai.google.dev)
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+      // Determinar qual modelo usar
+      let modelName = 'gemini-2.0-flash'; // Modelo padrão
+      let config = {
+        temperature: 0.7,
+        maxOutputTokens: 2048
+      };
+      
+      if (model) {
+        // Se um modelo específico foi fornecido, usar ele
+        this.logger.log(`Usando modelo específico: ${model.name} (${model.provider})`);
+        
+        if (model.provider === 'gemini') {
+          modelName = model.name;
+        } else {
+          // Aqui você implementaria a lógica para outros provedores
+          this.logger.warn(`Provedor ${model.provider} ainda não implementado. Usando Gemini como fallback.`);
+          // No futuro: switch case para diferentes provedores
+        }
+        
+        // Usar a configuração do modelo, se fornecida
+        if (modelConfig) {
+          config = modelConfig;
+          this.logger.log(`Usando configuração personalizada do modelo: ${JSON.stringify(config)}`);
+        } else if (model.defaultConfig) {
+          config = model.defaultConfig;
+          this.logger.log(`Usando configuração padrão do modelo: ${JSON.stringify(config)}`);
+        }
+      }
+
+      // Usar o modelo selecionado
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
       const queryParams = `?key=${this.apiKey}`;
       
       // Verificar se alguma mensagem tem imagem
@@ -107,7 +143,7 @@ export class GeminiService {
       // Preparar metadados para log e contexto
       const metadata = {
         timestamp: now.toISOString(),
-        model: "gemini-2.0-flash",
+        model: modelName,
         messages_count: messages.length,
         grounding_used: useWebSearch,
       };
@@ -192,10 +228,7 @@ export class GeminiService {
             parts: parts
           }
         ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048
-        }
+        generationConfig: config
       };
 
       // Se o grounding estiver ativado, adicionar a ferramenta google_search para Gemini 2.0
@@ -322,9 +355,8 @@ export class GeminiService {
         return `Erro de rede: ${fetchError.message}`;
       }
     } catch (error) {
-      // Em vez de lançar uma exceção genérica, retornar uma mensagem de erro específica
       this.logger.error('Erro ao gerar resposta:', error);
-      return `Erro no serviço Gemini: ${error.message}`;
+      throw error;
     }
   }
 

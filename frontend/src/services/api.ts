@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Conversation, Message, ModelConfig, FileResponse, Folder } from '../types'; // Adicionado Folder aqui
+import { Conversation, Message, ModelConfig, FileResponse, Folder, Model } from '../types'; // Adicionado Model aqui
 
 const API_URL = 'http://localhost:3001/api';
 const BASE_URL = 'http://localhost:3001'; // Base URL para arquivos estáticos
@@ -37,8 +37,8 @@ export const getConversation = async (id: number): Promise<Conversation> => {
   return response.data;
 };
 
-export const createConversation = async (title: string): Promise<Conversation> => {
-  const response = await axios.post(`${API_URL}/conversations`, { title });
+export const createConversation = async (title: string, modelId?: number): Promise<Conversation> => {
+  const response = await axios.post(`${API_URL}/conversations`, { title, modelId });
   return response.data;
 };
 
@@ -158,6 +158,39 @@ export const removeConversationFromFolder = async (conversationId: number): Prom
 
 export const resetSystemPrompt = async (): Promise<void> => {
   await axios.put(`${API_URL}/config/system-prompt/reset`);
+};
+
+// API de Modelos
+export const getModels = async (): Promise<Model[]> => {
+  const response = await axios.get(`${API_URL}/models`);
+  return response.data;
+};
+
+export const getModel = async (id: number): Promise<Model> => {
+  const response = await axios.get(`${API_URL}/models/${id}`);
+  return response.data;
+};
+
+export const getModelsByProvider = async (provider: string): Promise<Model[]> => {
+  const response = await axios.get(`${API_URL}/models/provider/${provider}`);
+  return response.data;
+};
+
+export const updateModelAvailability = async (id: number, isAvailable: boolean): Promise<Model> => {
+  const response = await axios.patch(`${API_URL}/models/${id}/availability`, { isAvailable });
+  return response.data;
+};
+
+export const updateConversationModel = async (
+  conversationId: number, 
+  modelId: number, 
+  modelConfig?: ModelConfig
+): Promise<Conversation> => {
+  const response = await axios.patch(`${API_URL}/conversations/${conversationId}/model`, {
+    modelId,
+    modelConfig
+  });
+  return response.data;
 };
 
 export default axios; 

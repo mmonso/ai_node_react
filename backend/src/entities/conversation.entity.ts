@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Message } from './message.entity';
 import { Folder } from './folder.entity';
+import { Model } from './model.entity';
 
 @Entity()
 export class Conversation {
@@ -25,4 +26,19 @@ export class Conversation {
 
   @Column({ type: 'int', nullable: true })
   folderId: number;
+
+  @ManyToOne(() => Model, { nullable: true, eager: true })
+  @JoinColumn({ name: 'modelId' })
+  model: Model;
+
+  @Column({ type: 'int', nullable: true })
+  modelId: number;
+
+  @Column({ type: 'simple-json', nullable: true })
+  modelConfig: {
+    temperature: number;
+    topP?: number;
+    topK?: number;
+    maxOutputTokens: number;
+  };
 }
