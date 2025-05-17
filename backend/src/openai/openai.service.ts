@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Model } from '../entities/model.entity';
 import * as fs from 'fs';
 import * as path from 'path';
+import { AIServiceInterface } from '../models/ai-service.interface';
 
 @Injectable()
-export class OpenAIService {
+export class OpenAIService implements AIServiceInterface {
   private apiKey: string;
   private readonly logger = new Logger(OpenAIService.name);
 
@@ -67,22 +68,36 @@ export class OpenAIService {
         minute: '2-digit'
       });
 
-      // Preparar mensagens para a API
-      const inputContent = [];
-      
-      // Adicionar o prompt do sistema como mensagem de desenvolvedor
-      inputContent.push({
-        role: "developer",
-        content: `${systemPrompt}\nAgora é ${formattedDate}.`
-      });
-      
-      // Adicionar as mensagens anteriores
+      // Preparar o corpo da requisição
+      const requestBody: any = {
+        model: modelName,
+        messages: [
+          {
+            role: "system",
+            content: `${systemPrompt}\nAgora é ${formattedDate}.`
+          }
+        ]
+      };
+
+      // Adicionar as mensagens anteriores no formato correto
       for (const msg of messages) {
-        const contentItems = [];
-        contentItems.push({
-          type: "input_text", 
-          text: msg.content
-        });
+        const messageObj: any = {
+          role: msg.isUser ? "user" : "assistant",
+          content: []
+        };
+        
+        // Adicionar conteúdo de texto
+        if (msg.content) {
+          if (typeof msg.content === 'string') {
+            if (msg.imageUrl && msg.isUser) {
+              // Se tiver imagem, será adicionada como array
+              messageObj.content = [{ type: "text", text: msg.content }];
+            } else {
+              // Se for só texto, pode ser string direta
+              messageObj.content = msg.content;
+            }
+          }
+        }
         
         // Se tiver imagem e for uma mensagem do usuário, adicionar a imagem
         if (msg.imageUrl && msg.isUser) {
@@ -117,10 +132,9 @@ export class OpenAIService {
               this.logger.debug(`Tipo MIME detectado: ${mimeType}, tamanho base64: ${base64Image.length}`);
               
               // Adicionar imagem como parte da mensagem
-              contentItems.push({
-                type: "input_image",
-                image_url: `data:${mimeType};base64,${base64Image}`,
-                detail: "high"
+              messageObj.content.push({
+                type: "image_url",
+                image_url: `data:${mimeType};base64,${base64Image}`
               });
               
               this.logger.debug(`Imagem adicionada com sucesso à requisição`);
@@ -133,26 +147,21 @@ export class OpenAIService {
         }
         
         // Adicionar à lista de mensagens
-        inputContent.push({
-          role: msg.isUser ? "user" : "assistant",
-          content: contentItems
-        });
+        requestBody.messages.push(messageObj);
       }
-
-      // Preparar o corpo da requisição
-      const requestBody: any = {
-        model: modelName,
-        input: inputContent
-      };
 
       // Adicionar configurações do modelo
       if (config.temperature) {
         requestBody.temperature = config.temperature;
       }
+      
+      if (config.maxOutputTokens) {
+        requestBody.max_tokens = config.maxOutputTokens;
+      }
 
       try {
         // Fazer a requisição para a API
-        const response = await fetch('https://api.openai.com/v1/responses', {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -175,23 +184,33 @@ export class OpenAIService {
         const responseData = await response.json();
         
         // Extrair o texto da resposta
-        if (responseData.output_text) {
-          return responseData.output_text;
-        }
-        
-        // Tentar extrair a resposta da estrutura completa
-        if (responseData.output && responseData.output.length > 0) {
-          for (const item of responseData.output) {
-            if (item.type === 'message' && 
-                item.content && 
-                item.content.length > 0) {
-              for (const content of item.content) {
-                if (content.type === 'output_text') {
-                  return content.text;
-                }
-              }
+        if (responseData.choices && responseData.choices.length > 0 && 
+            responseData.choices[0].message && responseData.choices[0].message.content) {
+          
+          let finalResponseText = responseData.choices[0].message.content;
+          
+          // Processar a resposta para remover possíveis timestamps no início
+          const timestampRegexes = [
+            /^\s*\[\d{1,2}:\d{2}(:\d{2})?\]\s*/,                      // [HH:MM] ou [HH:MM:SS]
+            /^\s*\d{1,2}:\d{2}(:\d{2})?\s*/,                          // HH:MM ou HH:MM:SS
+            /^\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*/,                      // (HH:MM) ou (HH:MM:SS)
+            /^\s*\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(:\d{2})?\s*/     // DD/MM/YYYY HH:MM ou DD/MM/YYYY HH:MM:SS
+          ];
+          
+          for (const regex of timestampRegexes) {
+            if (regex.test(finalResponseText)) {
+              finalResponseText = finalResponseText.replace(regex, '');
+              break; // Parar após encontrar o primeiro formato
             }
           }
+          
+          // Verificar se a resposta começa com "Assistente:" ou "Assistente [HH:MM]:"
+          const assistantPrefixRegex = /^\s*(Assistente(\s*\[\d{1,2}:\d{2}(:\d{2})?\])?\s*:)\s*/;
+          if (assistantPrefixRegex.test(finalResponseText)) {
+            finalResponseText = finalResponseText.replace(assistantPrefixRegex, '');
+          }
+          
+          return finalResponseText;
         }
         
         // Se não conseguir extrair a resposta, retornar o JSON completo
@@ -213,15 +232,19 @@ export class OpenAIService {
       }
 
       // Usar um modelo mais simples para geração de título
-      const model = 'gpt-4.1-mini';
+      const model = 'gpt-4o-mini';
       
       const requestBody: any = {
         model: model,
-        input: "Gere um título curto e descritivo para esta conversa com base na primeira mensagem do usuário. O título deve ter no máximo 6 palavras. Retorne apenas o título, sem aspas ou pontuação adicional: " + content,
-        temperature: 0.7
+        messages: [{
+          role: "user",
+          content: "Gere um título curto e descritivo para esta conversa com base na primeira mensagem do usuário. O título deve ter no máximo 3 palavras. Retorne apenas o título, sem aspas ou pontuação adicional, sem prefixos como 'Aqui estão algumas opções:' ou 'Título:'. Apenas o título em si: " + content
+        }],
+        temperature: 0.7,
+        max_tokens: 20
       };
 
-      const response = await fetch('https://api.openai.com/v1/responses', {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -239,8 +262,30 @@ export class OpenAIService {
       // Tenta extrair o título
       let title = 'Nova Conversa';
       
-      if (data.output_text) {
-        title = data.output_text.trim();
+      if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+        title = data.choices[0].message.content.trim();
+        
+        // Remover prefixos comuns
+        const prefixesToRemove = [
+          /^aqui estão algumas opções:?\s*/i,
+          /^algumas sugestões:?\s*/i,
+          /^sugestões:?\s*/i,
+          /^opções:?\s*/i,
+          /^título:?\s*/i,
+          /^sugestão de título:?\s*/i
+        ];
+        
+        for (const regex of prefixesToRemove) {
+          title = title.replace(regex, '');
+        }
+        
+        // Remover aspas se presentes
+        title = title.replace(/^["']|["']$/g, '');
+        
+        // Garantir que o título comece com letra maiúscula
+        if (title.length > 0) {
+          title = title.charAt(0).toUpperCase() + title.slice(1);
+        }
       }
       
       return title;

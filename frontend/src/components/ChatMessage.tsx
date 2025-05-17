@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import styled, { keyframes } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import SyntaxHighlighter from 'react-syntax-highlighter';
@@ -154,26 +154,65 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false }) 
   const [imageUrl, setImageUrl] = useState(message.imageUrl || '');
   const [groundingMetadata, setGroundingMetadata] = useState<GroundingMetadata | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const [showTimestamp, setShowTimestamp] = useState(false);
+  const [processedContent, setProcessedContent] = useState(message.content);
 
-  // Parse grounding metadata if available
+  // Format timestamp
+  const formattedTimestamp = useMemo(() => {
+    if (!message.timestamp) return '';
+    const date = new Date(message.timestamp);
+    return date.toLocaleTimeString('pt-BR', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }, [message.timestamp]);
+
+  // Process message content to remove timestamps and parse grounding metadata
   useEffect(() => {
     if (message.content) {
+      // Remover timestamps que possam estar no início da mensagem
+      let content = message.content;
+      
+      // Regex para detectar vários formatos de timestamp
+      const timestampRegexes = [
+        /^\s*\[\d{1,2}:\d{2}(:\d{2})?\]\s*/,                      // [HH:MM] ou [HH:MM:SS]
+        /^\s*\d{1,2}:\d{2}(:\d{2})?\s*/,                          // HH:MM ou HH:MM:SS
+        /^\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*/,                      // (HH:MM) ou (HH:MM:SS)
+        /^\s*\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(:\d{2})?\s*/     // DD/MM/YYYY HH:MM ou DD/MM/YYYY HH:MM:SS
+      ];
+      
+      for (const regex of timestampRegexes) {
+        if (regex.test(content)) {
+          content = content.replace(regex, '');
+          break; // Parar após encontrar o primeiro formato
+        }
+      }
+      
+      // Verificar se o conteúdo começa com "Assistente:" ou "Assistente [HH:MM]:"
+      const assistantPrefixRegex = /^\s*(Assistente(\s*\[\d{1,2}:\d{2}(:\d{2})?\])?\s*:)\s*/;
+      if (assistantPrefixRegex.test(content)) {
+        content = content.replace(assistantPrefixRegex, '');
+      }
+      
+      // Após remover timestamps, verificar se é JSON com metadados de grounding
       try {
         // Tentar fazer parse da mensagem como JSON
         // Em vez de usar regex, vamos verificar se começa e termina com chaves
-        if (message.content.trim().startsWith('{') && message.content.trim().endsWith('}')) {
-          const parsedData = JSON.parse(message.content);
+        if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+          const parsedData = JSON.parse(content);
           if (parsedData.text && parsedData.groundingMetadata) {
             // Se tiver metadados de grounding, extrair o texto e os metadados
             setGroundingMetadata(parsedData.groundingMetadata);
-            // Atualizar a mensagem para mostrar apenas o texto
-            message.content = parsedData.text;
+            // Atualizar o conteúdo para mostrar apenas o texto
+            content = parsedData.text;
           }
         }
       } catch (e) {
-        // Não é um JSON válido, manter o conteúdo original
+        // Não é um JSON válido, manter o conteúdo processado
         console.log('Não é um JSON de grounding:', e);
       }
+      
+      setProcessedContent(content);
     }
   }, [message.content]);
 
@@ -264,7 +303,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false }) 
   return (
     <MessageContainer $isUser={message.isUser}>
       <MessageContent $isUser={message.isUser}>
-        <MessageText $isUser={message.isUser}>
+        {showTimestamp && (
+          <MessageTimestamp>{formattedTimestamp}</MessageTimestamp>
+        )}
+        <MessageText $isUser={message.isUser} onClick={() => setShowTimestamp(!showTimestamp)}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -302,7 +344,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false }) 
               }
             }}
           >
-            {message.content}
+            {processedContent}
           </ReactMarkdown>
           
           {message.imageUrl && !imageError && (
@@ -676,6 +718,15 @@ const SourceLink = styled.a`
   &:hover {
     text-decoration: underline;
   }
+`;
+
+const MessageTimestamp = styled.div`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--secondary-text);
+  opacity: 0.7;
 `;
 
 export default ChatMessage;

@@ -136,8 +136,22 @@ export class ModelsService implements OnModuleInit {
     return this.modelsRepository.find();
   }
 
-  async findById(id: number): Promise<Model> {
-    return this.modelsRepository.findOne({ where: { id } });
+  async findOne(id: number): Promise<Model> {
+    return this.modelsRepository.findOneBy({ id });
+  }
+
+  async create(modelData: Partial<Model>): Promise<Model> {
+    const model = this.modelsRepository.create(modelData);
+    return this.modelsRepository.save(model);
+  }
+
+  async update(id: number, modelData: Partial<Model>): Promise<Model> {
+    await this.modelsRepository.update(id, modelData);
+    return this.findOne(id);
+  }
+
+  async remove(id: number): Promise<void> {
+    await this.modelsRepository.delete(id);
   }
 
   async findByProvider(provider: string): Promise<Model[]> {
@@ -146,6 +160,6 @@ export class ModelsService implements OnModuleInit {
 
   async updateAvailability(id: number, isAvailable: boolean): Promise<Model> {
     await this.modelsRepository.update(id, { isAvailable });
-    return this.findById(id);
+    return this.findOne(id);
   }
 } 

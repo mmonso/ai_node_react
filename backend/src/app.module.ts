@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConversationsModule } from './conversations/conversations.module';
 import { GeminiModule } from './gemini/gemini.module';
 import { OpenAIModule } from './openai/openai.module'; // Importar OpenAIModule
+import { AnthropicModule } from './anthropic/anthropic.module'; // Importar AnthropicModule
+import { WebSearchModule } from './web-search/web-search.module'; // Importar WebSearchModule
 import { ConfigModule } from './config/config.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { FoldersModule } from './folders/folders.module'; // Import FoldersModule
@@ -48,6 +50,8 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     ConversationsModule,
     GeminiModule,
     OpenAIModule, // Adicionar o módulo OpenAI
+    AnthropicModule, // Adicionar o módulo Anthropic
+    WebSearchModule, // Adicionar o módulo WebSearch
     ConfigModule,
     UploadsModule,
     FoldersModule,

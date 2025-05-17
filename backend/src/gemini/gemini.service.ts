@@ -3,14 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Model } from '../entities/model.entity';
+import { AIServiceInterface } from '../models/ai-service.interface';
+import { WebSearchService } from '../web-search/web-search.service';
+import { Message } from '../entities/message.entity';
 
 @Injectable()
-export class GeminiService {
+export class GeminiService implements AIServiceInterface {
   private apiKey: string;
   private readonly logger = new Logger(GeminiService.name);
 
   constructor(
-    private configService: ConfigService
+    private configService: ConfigService,
+    private webSearchService: WebSearchService
   ) {
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!this.apiKey) {
@@ -158,10 +162,11 @@ export class GeminiService {
       for (const msg of messages) {
         // Adicionar a mensagem de texto
         const role = msg.isUser ? 'Usuário' : 'Assistente';
-        // Adicionar timestamp à mensagem
+        // Adicionar timestamp à mensagem apenas para o contexto do modelo, não para exibição
         const msgTime = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR') : '';
         const timestampStr = msgTime ? ` [${msgTime}]` : '';
         
+        // Adicionar a mensagem com timestamp para o modelo, mas não modificar o conteúdo original
         parts.push({ text: `${role}${timestampStr}: ${msg.content}\n` });
         
         // Se tiver imagem e for uma mensagem do usuário, adicionar a imagem
@@ -296,6 +301,30 @@ export class GeminiService {
           }));
         }
 
+        // Extrair o texto da resposta
+        let finalResponseText = candidate.content.parts[0].text || '';
+        
+        // Processar a resposta para remover possíveis timestamps no início
+        const timestampRegexes = [
+          /^\s*\[\d{1,2}:\d{2}(:\d{2})?\]\s*/,                      // [HH:MM] ou [HH:MM:SS]
+          /^\s*\d{1,2}:\d{2}(:\d{2})?\s*/,                          // HH:MM ou HH:MM:SS
+          /^\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*/,                      // (HH:MM) ou (HH:MM:SS)
+          /^\s*\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(:\d{2})?\s*/     // DD/MM/YYYY HH:MM ou DD/MM/YYYY HH:MM:SS
+        ];
+        
+        for (const regex of timestampRegexes) {
+          if (regex.test(finalResponseText)) {
+            finalResponseText = finalResponseText.replace(regex, '');
+            break; // Parar após encontrar o primeiro formato
+          }
+        }
+        
+        // Verificar se a resposta começa com "Assistente:" ou "Assistente [HH:MM]:"
+        const assistantPrefixRegex = /^\s*(Assistente(\s*\[\d{1,2}:\d{2}(:\d{2})?\])?\s*:)\s*/;
+        if (assistantPrefixRegex.test(finalResponseText)) {
+          finalResponseText = finalResponseText.replace(assistantPrefixRegex, '');
+        }
+
         // Verificar se temos metadados de embasamento (grounding)
         if (useWebSearch) {
           this.logger.log(`Verificando metadados de grounding na resposta. useWebSearch=${useWebSearch}, tem groundingMetadata=${!!candidate.groundingMetadata}`);
@@ -305,48 +334,39 @@ export class GeminiService {
           this.logger.log('Resposta contém metadados de grounding com Google Search');
           this.logger.debug('Metadados de grounding:', JSON.stringify(candidate.groundingMetadata));
           
-          // Extrair o texto da resposta
-          const finalResponseText = candidate.content.parts[0].text;
+          // Criar uma resposta estruturada que inclui o texto e os metadados de grounding
+          // Estrutura de acordo com a documentação do Gemini 2.0
+          const responseWithGrounding = JSON.stringify({
+            text: finalResponseText,
+            groundingMetadata: {
+              // Preservar o searchEntryPoint.renderedContent diretamente se disponível (contém o HTML das sugestões)
+              searchEntryPoint: candidate.groundingMetadata.searchEntryPoint || null,
+              
+              // Usar webSearchQueries diretamente conforme documentação
+              searchSuggestions: candidate.groundingMetadata.webSearchQueries || [],
+              
+              // Extrair as fontes do groundingChunks conforme documentação
+              sources: (candidate.groundingMetadata.groundingChunks || []).map(chunk => ({
+                title: chunk.web?.title || 'Fonte',
+                uri: chunk.web?.uri || '#'
+              })),
+              
+              // Citações e seus índices de groundingSupports
+              citations: (candidate.groundingMetadata.groundingSupports || []).map(support => ({
+                text: support.segment?.text || '',
+                startIndex: support.segment?.startIndex || 0,
+                endIndex: support.segment?.endIndex || 0,
+                sources: support.groundingChunkIndices?.map(index => index) || [],
+                confidence: Array.isArray(support.confidenceScores) ? 
+                            Math.max(...support.confidenceScores) : 
+                            (support.confidence || 0)
+              }))
+            }
+          });
           
-          try {
-            // Criar uma resposta estruturada que inclui o texto e os metadados de grounding
-            // Estrutura de acordo com a documentação do Gemini 2.0
-            const responseWithGrounding = JSON.stringify({
-              text: finalResponseText,
-              groundingMetadata: {
-                // Preservar o searchEntryPoint.renderedContent diretamente se disponível (contém o HTML das sugestões)
-                searchEntryPoint: candidate.groundingMetadata.searchEntryPoint || null,
-                
-                // Usar webSearchQueries diretamente conforme documentação
-                searchSuggestions: candidate.groundingMetadata.webSearchQueries || [],
-                
-                // Extrair as fontes do groundingChunks conforme documentação
-                sources: (candidate.groundingMetadata.groundingChunks || []).map(chunk => ({
-                  title: chunk.web?.title || 'Fonte',
-                  uri: chunk.web?.uri || '#'
-                })),
-                
-                // Citações e seus índices de groundingSupports
-                citations: (candidate.groundingMetadata.groundingSupports || []).map(support => ({
-                  text: support.segment?.text || '',
-                  startIndex: support.segment?.startIndex || 0,
-                  endIndex: support.segment?.endIndex || 0,
-                  sources: support.groundingChunkIndices?.map(index => index) || [],
-                  confidence: Array.isArray(support.confidenceScores) ? 
-                              Math.max(...support.confidenceScores) : 
-                              (support.confidence || 0)
-                }))
-              }
-            });
-            
-            return responseWithGrounding;
-          } catch (error) {
-            this.logger.error('Erro ao processar metadados de grounding:', error);
-            return finalResponseText;
-          }
+          return responseWithGrounding;
         } else {
           // Resposta normal sem embasamento
-          const finalResponseText = candidate.content.parts[0].text;
           this.logger.debug('Texto de resposta extraído com sucesso');
           return finalResponseText;
         }
@@ -371,7 +391,7 @@ export class GeminiService {
       const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
       const queryParams = `?key=${this.apiKey}`;
 
-      const prompt = `Por favor, crie um título curto e descritivo (máximo 5 palavras) para uma conversa que começa com esta mensagem: "${firstUserMessage}"`;
+      const prompt = `Por favor, crie um título curto e descritivo (máximo 3 palavras) para uma conversa que começa com esta mensagem: "${firstUserMessage}". Retorne apenas o título, sem aspas ou pontuação adicional, sem prefixos como 'Aqui estão algumas opções:' ou 'Título:'. Apenas o título em si.`;
 
       const requestBody = {
         contents: [
@@ -407,9 +427,31 @@ export class GeminiService {
         return 'Nova Conversa';
       }
 
-      const title = data.candidates[0].content.parts[0].text.trim();
-      // Remover aspas se presentes (às vezes o modelo inclui aspas)
-      return title.replace(/^["']|["']$/g, '');
+      let title = data.candidates[0].content.parts[0].text.trim();
+      
+      // Remover prefixos comuns
+      const prefixesToRemove = [
+        /^aqui estão algumas opções:?\s*/i,
+        /^algumas sugestões:?\s*/i,
+        /^sugestões:?\s*/i,
+        /^opções:?\s*/i,
+        /^título:?\s*/i,
+        /^sugestão de título:?\s*/i
+      ];
+      
+      for (const regex of prefixesToRemove) {
+        title = title.replace(regex, '');
+      }
+      
+      // Remover aspas se presentes
+      title = title.replace(/^["']|["']$/g, '');
+      
+      // Garantir que o título comece com letra maiúscula
+      if (title.length > 0) {
+        title = title.charAt(0).toUpperCase() + title.slice(1);
+      }
+      
+      return title;
     } catch (error) {
       this.logger.error('Erro ao gerar título:', error);
       return 'Nova Conversa';

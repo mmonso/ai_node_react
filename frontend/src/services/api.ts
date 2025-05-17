@@ -186,11 +186,65 @@ export const updateConversationModel = async (
   modelId: number, 
   modelConfig?: ModelConfig
 ): Promise<Conversation> => {
-  const response = await axios.patch(`${API_URL}/conversations/${conversationId}/model`, {
-    modelId,
-    modelConfig
-  });
-  return response.data;
+  console.log(`API: Atualizando modelo da conversa ${conversationId} para modelo ${modelId}`, { modelConfig });
+  
+  try {
+    const response = await axios.patch(`${API_URL}/conversations/${conversationId}/model`, {
+      modelId,
+      modelConfig
+    });
+    
+    console.log(`API: Resposta da atualização de modelo:`, response.data);
+    
+    // Verificar se a resposta contém os dados esperados
+    if (response.data && response.data.modelId !== modelId) {
+      console.warn(`API: Modelo retornado (${response.data.modelId}) não corresponde ao solicitado (${modelId})`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('API: Erro ao atualizar modelo da conversa:', error);
+    throw error;
+  }
+};
+
+// API de Modelo Ativo Global
+export const getActiveModel = async (): Promise<{ model: Model | null; config: any }> => {
+  console.log('API: Obtendo modelo ativo global');
+  try {
+    const response = await axios.get(`${API_URL}/active-model`);
+    console.log('API: Modelo ativo obtido:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('API: Erro ao obter modelo ativo:', error);
+    return { model: null, config: null };
+  }
+};
+
+export const setActiveModel = async (modelId: number, modelConfig?: any): Promise<{ model: Model | null; config: any }> => {
+  console.log(`API: Definindo modelo ativo global para ID=${modelId}`, { modelConfig });
+  try {
+    const response = await axios.post(`${API_URL}/active-model`, { 
+      modelId, 
+      modelConfig 
+    });
+    console.log('API: Modelo ativo definido:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('API: Erro ao definir modelo ativo:', error);
+    return { model: null, config: null };
+  }
+};
+
+export const updateActiveModelConfig = async (modelConfig: any): Promise<boolean> => {
+  console.log('API: Atualizando configuração do modelo ativo global', modelConfig);
+  try {
+    const response = await axios.post(`${API_URL}/active-model/config`, modelConfig);
+    return response.data.success;
+  } catch (error) {
+    console.error('API: Erro ao atualizar configuração do modelo ativo:', error);
+    return false;
+  }
 };
 
 export default axios; 

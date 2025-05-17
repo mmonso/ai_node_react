@@ -13,6 +13,8 @@ import { Model } from '../entities/model.entity';
 import { GeminiModule } from '../gemini/gemini.module';
 import { OpenAIModule } from '../openai/openai.module';
 import { ConfigModule } from '../config/config.module';
+import { ModelsModule } from '../models/models.module';
+import { WebSearchModule } from '../web-search/web-search.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { ConfigModule } from '../config/config.module';
     GeminiModule,
     OpenAIModule,
     ConfigModule,
+    ModelsModule,
+    WebSearchModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads',
@@ -33,5 +37,6 @@ import { ConfigModule } from '../config/config.module';
   ],
   controllers: [ConversationsController],
   providers: [ConversationsService],
+  exports: [ConversationsService],
 })
 export class ConversationsModule {} 

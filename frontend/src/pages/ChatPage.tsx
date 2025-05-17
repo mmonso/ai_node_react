@@ -65,7 +65,10 @@ const ChatPage: React.FC = () => {
   const [error, setError] = useState('');
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Configuração do modelo
+  // Usar o modelo ativo global e sua configuração
+  const { reloadTrigger, triggerReload, activeModel, activeModelConfig } = useAppContext();
+  
+  // Configuração do modelo local (pode ser substituída pelo activeModelConfig)
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     temperature: 0.7,
     topP: 0.95,
@@ -73,8 +76,15 @@ const ChatPage: React.FC = () => {
     topK: 40,
   });
   
+  // Atualizar o modelConfig local quando o activeModelConfig mudar
+  useEffect(() => {
+    if (activeModelConfig) {
+      console.log('ChatPage: Atualizando configuração do modelo com o modelo ativo global');
+      setModelConfig(activeModelConfig);
+    }
+  }, [activeModelConfig]);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { reloadTrigger, triggerReload } = useAppContext(); 
 
   // Efeito para limpar o timer quando o componente é desmontado
   useEffect(() => {
@@ -121,11 +131,21 @@ const ChatPage: React.FC = () => {
     }
   }, [isWaiting]);
 
+  // Efeito específico para recarregar a conversa quando o reloadTrigger mudar
   useEffect(() => {
-    if (id) {
+    if (id && reloadTrigger > 0) {
+      console.log(`ChatPage: Recarregando conversa ${id} após trigger de reload (${reloadTrigger})`);
       loadConversation();
     }
-  }, [id, reloadTrigger]);
+  }, [reloadTrigger, id]);
+
+  // Efeito para carregar a conversa inicialmente
+  useEffect(() => {
+    if (id) {
+      console.log(`ChatPage: Carregando conversa ${id} pela primeira vez`);
+      loadConversation();
+    }
+  }, [id]);
   
   useEffect(() => {
     scrollToBottom();
@@ -134,7 +154,14 @@ const ChatPage: React.FC = () => {
   const loadConversation = async () => {
     try {
       setIsLoading(true);
+      console.log(`ChatPage: Carregando conversa ${id}...`);
+      
       const data = await getConversation(Number(id));
+      console.log(`ChatPage: Conversa carregada:`, {
+        id: data.id,
+        title: data.title,
+        messageCount: data.messages?.length
+      });
       
       // Verificar se há mensagens com imagens e pré-carregar
       if (data && data.messages) {
@@ -169,11 +196,7 @@ const ChatPage: React.FC = () => {
       
       setConversation(data);
       
-      // Atualizar o modelo config com o da conversa se estiver disponível
-      if (data.modelConfig) {
-        setModelConfig(data.modelConfig);
-      }
-      
+      console.log(`ChatPage: Conversa ${id} carregada com sucesso`);
       setError('');
     } catch (err: any) {
       setError(`Erro ao carregar conversa: ${err.message}`);
@@ -235,40 +258,18 @@ const ChatPage: React.FC = () => {
     
     try {
       // Envia a mensagem e recebe a resposta do bot
-      const updatedMessages = await sendMessage(Number(id), content, file, modelConfig, useWebSearch);
+      const updatedMessages = await sendMessage(Number(id), content, file, config, useWebSearch);
       
       // Log para depuração
       console.log('Mensagens recebidas do servidor:', updatedMessages);
       
-      // Verificamos se temos mensagens atualizadas do servidor
+      // Verificar se há mensagem do usuário com imagem
+      const userMessageWithImage = updatedMessages.find(msg => msg.isUser && msg.imageUrl);
+      console.log('Mensagem do usuário com imagem:', userMessageWithImage?.imageUrl);
+      
+      // Atualiza a conversa com as mensagens recebidas do servidor
       if (updatedMessages && updatedMessages.length > 0) {
-        
-        // A resposta do servidor deve conter todas as mensagens, incluindo a nova resposta do bot
-        // Mas queremos preservar as URLs temporárias no cliente
-        // Vamos verificar se temos a mensagem atual com imageUrl
-        const userMessageWithImage = conversation?.messages?.find(msg =>
-          msg.isUser && msg.imageUrl && msg.content === content
-        );
-        
-        console.log('Mensagem do usuário com imagem:', userMessageWithImage);
-        
-        // Garantir que a imageUrl da última mensagem do usuário seja persistida
-        // Isso é importante principalmente para o caso de blob URLs
-        if (userMessageWithImage && userMessageWithImage.imageUrl) {
-          // Encontrar a mesma mensagem no retorno do servidor
-          const serverUserMessage = updatedMessages.find(msg => 
-            msg.isUser && msg.content === content
-          );
-          
-          if (serverUserMessage && serverUserMessage.imageUrl && !serverUserMessage.imageUrl.startsWith('http')) {
-            console.log('URL da imagem no servidor:', serverUserMessage.imageUrl);
-            console.log('Convertendo para URL absoluta');
-            // Converter para URL absoluta
-            serverUserMessage.imageUrl = `${BASE_URL}${serverUserMessage.imageUrl}`;
-          }
-        }
-                
-        // Pegamos apenas a última mensagem que deve ser a resposta do bot
+        // Pega a última mensagem, que deve ser a resposta do bot
         const botResponse = updatedMessages[updatedMessages.length - 1];
         
         if (!botResponse.isUser) {
@@ -323,10 +324,7 @@ const ChatPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Layout 
-        currentModelId={conversation?.modelId || null}
-        currentModelConfig={conversation?.modelConfig || null}
-      >
+      <Layout>
         <LoadingIndicator>
           <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" />
@@ -359,10 +357,7 @@ const ChatPage: React.FC = () => {
   }
   
   return (
-    <Layout 
-      currentModelId={conversation?.modelId || null}
-      currentModelConfig={conversation?.modelConfig || null}
-    >
+    <Layout>
       <ChatContainer>
         <MessagesContainer>
           {(conversation?.messages?.length === 0) ? (

@@ -1,28 +1,32 @@
-import { Injectable, NotFoundException } from '@nestjs/common'; // Added NotFoundException
+import { Injectable, NotFoundException, Logger } from '@nestjs/common'; // Adicionado Logger
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { Folder } from '../entities/folder.entity'; // Added Folder import
 import { Model } from '../entities/model.entity'; // Added Model import
-import { GeminiService } from '../gemini/gemini.service';
-import { OpenAIService } from '../openai/openai.service'; // Adicionar o serviço OpenAI
 import { ConfigService } from '../config/config.service';
+import { AIServiceFactory } from '../models/ai-service.factory';
+import { AIProviderService } from '../models/ai-provider.service';
+import { ActiveModelService } from '../models/active-model.service';
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+
   constructor(
     @InjectRepository(Conversation)
     private conversationsRepository: Repository<Conversation>,
     @InjectRepository(Message)
     private messagesRepository: Repository<Message>,
-    private geminiService: GeminiService,
-    private openaiService: OpenAIService, // Injetar o serviço OpenAI
     private configService: ConfigService,
     @InjectRepository(Folder) // Inject Folder repository
     private foldersRepository: Repository<Folder>,
     @InjectRepository(Model) // Inject Model repository
     private modelsRepository: Repository<Model>,
+    private aiServiceFactory: AIServiceFactory,
+    private aiProviderService: AIProviderService,
+    private activeModelService: ActiveModelService,
   ) {}
  
   async findAll(): Promise<Conversation[]> {
@@ -132,31 +136,27 @@ export class ConversationsService {
     const systemPrompt = await this.configService.getSystemPrompt();
     
     try {
-      let response;
+      // Obter o modelo ativo global e sua configuração
+      const { model: activeModel, config: activeModelConfig } = await this.activeModelService.getActiveModel();
       
-      // Verificar qual provedor de IA usar com base no modelo selecionado
-      if (conversation.model && conversation.model.provider === 'openai') {
-        // Usar o serviço OpenAI
-        response = await this.openaiService.generateResponse(
-          messages,
-          systemPrompt,
-          false,
-          conversation.model,
-          conversation.modelConfig
-        );
-      } else {
-        // Usar o serviço Gemini (padrão)
-        response = await this.geminiService.generateResponse(
-          messages,
-          systemPrompt,
-          false,
-          conversation.model,
-          conversation.modelConfig
-        );
-      }
+      this.logger.debug(`Gerando resposta para conversa ${conversationId} usando modelo global ${activeModel?.name || 'não especificado'}`);
+      
+      // Usar o providerService para obter o serviço apropriado ao modelo ativo global
+      const aiService = await this.aiProviderService.getService(activeModel);
+      
+      this.logger.debug(`Serviço de IA obtido para ${activeModel?.provider || 'provedor desconhecido'}`);
+      
+      const response = await aiService.generateResponse(
+        messages,
+        systemPrompt,
+        false,
+        activeModel,
+        activeModelConfig
+      );
       
       return this.addBotMessage(conversationId, response);
     } catch (error) {
+      this.logger.error(`Erro ao gerar resposta para conversa ${conversationId}:`, error);
       // Se ocorrer um erro, cria uma mensagem de erro para não quebrar a conversa
       return this.addBotMessage(
         conversationId, 
@@ -199,6 +199,8 @@ export class ConversationsService {
   // --- Métodos para Modelos ---
   
   async updateConversationModel(conversationId: number, modelId: number, modelConfig?: any): Promise<Conversation> {
+    this.logger.log(`Atualizando modelo da conversa ${conversationId} para modelId=${modelId}`);
+    
     const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
     if (!conversation) {
       throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
@@ -209,7 +211,11 @@ export class ConversationsService {
       throw new NotFoundException(`Modelo com ID ${modelId} não encontrado.`);
     }
     
+    // Guardar o ID do modelo anterior para logging
+    const previousModelId = conversation.modelId;
+    
     conversation.modelId = modelId;
+    conversation.model = model; // Importante: atualizar também a referência ao objeto do modelo
     
     // Se não foi fornecida uma configuração personalizada, usar a padrão do modelo
     if (!modelConfig) {
@@ -219,6 +225,8 @@ export class ConversationsService {
     }
     
     conversation.updatedAt = new Date();
+    
+    this.logger.log(`Modelo da conversa ${conversationId} alterado: ${previousModelId} -> ${modelId} (${model.provider}/${model.name})`);
     
     return this.conversationsRepository.save(conversation);
   }

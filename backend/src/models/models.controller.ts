@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe } from '@nestjs/common';
 import { ModelsService } from './models.service';
 import { Model } from '../entities/model.entity';
 
@@ -12,20 +12,25 @@ export class ModelsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<Model> {
-    return this.modelsService.findById(Number(id));
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<Model> {
+    return this.modelsService.findOne(id);
   }
 
-  @Get('provider/:provider')
-  findByProvider(@Param('provider') provider: string): Promise<Model[]> {
-    return this.modelsService.findByProvider(provider);
+  @Post()
+  create(@Body() modelData: Partial<Model>): Promise<Model> {
+    return this.modelsService.create(modelData);
   }
 
-  @Patch(':id/availability')
-  updateAvailability(
-    @Param('id') id: string,
-    @Body('isAvailable') isAvailable: boolean,
+  @Put(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() modelData: Partial<Model>,
   ): Promise<Model> {
-    return this.modelsService.updateAvailability(Number(id), isAvailable);
+    return this.modelsService.update(id, modelData);
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.modelsService.remove(id);
   }
 } 

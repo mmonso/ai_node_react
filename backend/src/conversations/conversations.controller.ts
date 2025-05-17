@@ -3,10 +3,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ConversationsService } from './conversations.service';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
-import { GeminiService } from '../gemini/gemini.service';
-import { OpenAIService } from '../openai/openai.service';
 import { ConfigService } from '../config/config.service';
+import { AIServiceFactory } from '../models/ai-service.factory';
+import { AIProviderService } from '../models/ai-provider.service';
 import * as path from 'path';
+import { ActiveModelService } from '../models/active-model.service';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -14,9 +15,10 @@ export class ConversationsController {
 
   constructor(
     private conversationsService: ConversationsService,
-    private geminiService: GeminiService,
-    private openaiService: OpenAIService,
     private configService: ConfigService,
+    private aiServiceFactory: AIServiceFactory,
+    private aiProviderService: AIProviderService,
+    private activeModelService: ActiveModelService,
   ) {}
 
   @Get()
@@ -141,7 +143,7 @@ export class ConversationsController {
       }
     }
     
-    // Salva a mensagem do usuário
+    // Adicionar a mensagem do usuário
     const userMessage = await this.conversationsService.addUserMessage(
       id,
       body.content,
@@ -171,16 +173,11 @@ export class ConversationsController {
     if (conversation.title === 'Nova Conversa' && conversation.messages.length === 1) {
       this.logger.log(`Conversa "${conversation.title}" (${id}) detectada. Tentando gerar novo título...`);
       
-      // Gerar e atualizar título em background usando o provedor correto
-      let titlePromise;
+      // Obter o serviço apropriado para o modelo ativo global
+      const aiService = await this.aiProviderService.getService();
       
-      if (conversation.model && conversation.model.provider === 'openai') {
-        titlePromise = this.openaiService.generateConversationTitle(body.content);
-      } else {
-        titlePromise = this.geminiService.generateConversationTitle(body.content);
-      }
-      
-      titlePromise
+      // Gerar e atualizar título em background
+      aiService.generateConversationTitle(body.content)
         .then(newTitle => {
           if (newTitle && newTitle !== 'Nova Conversa') {
             this.logger.log(`Novo título gerado para conversa ${id}: "${newTitle}". Atualizando...`);
@@ -195,36 +192,26 @@ export class ConversationsController {
         });
     }
     
-    // Se existe uma configuração personalizada do modelo para esta requisição,
-    // atualiza a conversa com esta configuração temporariamente
-    if (modelConfig) {
-      await this.conversationsService.updateModelConfig(id, modelConfig);
-    }
+    // Obter o modelo ativo global e sua configuração
+    const { model: activeModel, config: activeModelConfig } = await this.activeModelService.getActiveModel();
+    
+    // Se existe uma configuração personalizada do modelo para esta requisição, usá-la
+    const finalModelConfig = modelConfig || activeModelConfig;
     
     // Gera a resposta do modelo apropriado
-    this.logger.log(`Gerando resposta para conversa ${id}${useWebSearch ? ' com busca na web' : ''}...`);
+    this.logger.log(`Gerando resposta para conversa ${id} usando modelo global ${activeModel?.name}${useWebSearch ? ' com busca na web' : ''}...`);
     
-    let botResponse;
+    // Obter o serviço apropriado para o modelo ativo global
+    const aiService = await this.aiProviderService.getService(activeModel);
     
-    if (conversation.model && conversation.model.provider === 'openai') {
-      // Usar o serviço OpenAI
-      botResponse = await this.openaiService.generateResponse(
-        conversation.messages, 
-        systemPrompt,
-        useWebSearch,
-        conversation.model,
-        conversation.modelConfig || modelConfig
-      );
-    } else {
-      // Usar o serviço Gemini (padrão)
-      botResponse = await this.geminiService.generateResponse(
-        conversation.messages, 
-        systemPrompt,
-        useWebSearch,
-        conversation.model,
-        conversation.modelConfig || modelConfig
-      );
-    }
+    // Gerar resposta
+    const botResponse = await aiService.generateResponse(
+      conversation.messages, 
+      systemPrompt,
+      useWebSearch,
+      activeModel,
+      finalModelConfig
+    );
     
     // Salva a resposta do bot
     await this.conversationsService.addBotMessage(id, botResponse);
