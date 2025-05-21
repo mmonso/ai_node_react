@@ -1,9 +1,9 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('models')
 export class Model {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn()
+  id: string;
 
   @Column()
   provider: string; // 'openai', 'gemini', 'anthropic', 'deepseek', 'grok'
@@ -14,18 +14,19 @@ export class Model {
   @Column()
   label: string; // Nome legível para exibição
 
-  @Column({ default: true })
+  @Column()
   isAvailable: boolean;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column('simple-json')
   capabilities: {
     textInput: boolean;
     imageInput: boolean;
     fileInput: boolean;
     webSearch: boolean;
+    tool_use?: boolean; // Adicionada capacidade para uso de ferramentas/funções
   };
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column('simple-json')
   defaultConfig: {
     temperature: number;
     topP?: number;
@@ -33,9 +34,15 @@ export class Model {
     maxOutputTokens: number;
   };
 
+  @Column({ type: 'datetime', nullable: true })
+  lastSeenAt: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  markedAsMissingSince: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

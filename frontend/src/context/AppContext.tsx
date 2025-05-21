@@ -7,7 +7,7 @@ interface AppContextType {
   triggerReload: () => void; // Função para incrementar o contador
   activeModel: Model | null;
   activeModelConfig: ModelConfig | null;
-  setActiveModelWithId: (modelId: number, config?: ModelConfig) => Promise<boolean>;
+  setActiveModelWithId: (modelId: string, config?: ModelConfig) => Promise<boolean>;
   updateActiveConfig: (config: ModelConfig) => Promise<boolean>;
   isLoadingModel: boolean;
 }
@@ -30,13 +30,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     const loadActiveModel = async () => {
       setIsLoadingModel(true);
+      console.log('AppContext: Iniciando carregamento do modelo ativo global...');
       try {
         const { model, config } = await getActiveModel();
-        console.log('AppContext: Modelo ativo carregado:', model?.name);
+        console.log('AppContext: Modelo ativo global carregado da API:', { modelName: model?.name, modelId: model?.id, config });
         setActiveModel(model);
         setActiveModelConfig(config);
       } catch (error) {
-        console.error('AppContext: Erro ao carregar modelo ativo:', error);
+        console.error('AppContext: Erro ao carregar modelo ativo global da API:', error);
       } finally {
         setIsLoadingModel(false);
       }
@@ -46,20 +47,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Função para definir o modelo ativo
-  const setActiveModelWithId = useCallback(async (modelId: number, config?: ModelConfig): Promise<boolean> => {
+  const setActiveModelWithId = useCallback(async (modelId: string, config?: ModelConfig): Promise<boolean> => {
+    console.log(`AppContext: Tentando definir modelo ativo global com ID: ${modelId}, Config:`, config);
     setIsLoadingModel(true);
     try {
       const result = await apiSetActiveModel(modelId, config);
-      if (result.model) {
-        console.log(`AppContext: Modelo ativo definido para ${result.model.name}`);
+      console.log('AppContext: Resposta da API setActiveModel:', result);
+      
+      if (result && result.model) {
+        if (result.model.id !== modelId) {
+          console.warn(`AppContext: ID do modelo retornado (${result.model.id}) não corresponde ao solicitado (${modelId})`);
+          return false;
+        }
+        
+        console.log(`AppContext: Modelo ativo global definido com sucesso para ${result.model.name} (ID: ${result.model.id}), Config:`, result.config);
         setActiveModel(result.model);
         setActiveModelConfig(result.config);
-        triggerReload(); // Recarregar para refletir a mudança
+        triggerReload();
         return true;
       }
+      
+      console.warn('AppContext: Falha ao definir modelo ativo global, API não retornou modelo válido.');
       return false;
     } catch (error) {
-      console.error('AppContext: Erro ao definir modelo ativo:', error);
+      console.error('AppContext: Erro na API ao definir modelo ativo global:', error);
       return false;
     } finally {
       setIsLoadingModel(false);

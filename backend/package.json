@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/main.js",
     "dev": "ts-node src/main.ts",
-    "watch": "nodemon -e ts --exec \"ts-node src/main.ts\""
+    "watch": "nodemon -e ts --exec \"ts-node src/main.ts\"",
+    "typeorm": "ts-node ./node_modules/typeorm/cli.js",
+    "typeorm:g": "npm run typeorm -- migration:generate -d ./typeorm.config.ts"
   },
   "keywords": [
     "chatbot",
@@ -18,15 +20,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@nestjs/axios": "^1.0.1",
     "@nestjs/common": "^9.0.0",
     "@nestjs/config": "^2.3.0",
     "@nestjs/core": "^9.0.0",
     "@nestjs/platform-express": "^9.0.0",
-    "@nestjs/serve-static": "^5.0.3",
+    "@nestjs/schedule": "^3.0.4",
+    "@nestjs/serve-static": "^3.0.1",
     "@nestjs/typeorm": "^9.0.0",
     "axios": "^1.9.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
+    "express": "^4.21.2",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "sqlite3": "^5.1.6",

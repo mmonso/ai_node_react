@@ -1,20 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios'; // Adicionado HttpService
+import { firstValueFrom } from 'rxjs'; // Adicionado firstValueFrom
+import axios from 'axios'; // Adicionado axios
 import * as fs from 'fs';
 import * as path from 'path';
 import { Model } from '../entities/model.entity';
 import { AIServiceInterface } from '../models/ai-service.interface';
+import { ProviderApiService, ProviderModelInfo } from '../models/provider-api.service.interface';
 import { WebSearchService } from '../web-search/web-search.service';
 import { Message } from '../entities/message.entity';
 
 @Injectable()
-export class GeminiService implements AIServiceInterface {
+export class GeminiService implements AIServiceInterface, ProviderApiService {
   private apiKey: string;
   private readonly logger = new Logger(GeminiService.name);
 
   constructor(
     private configService: ConfigService,
-    private webSearchService: WebSearchService
+    private webSearchService: WebSearchService,
+    private httpService: HttpService, // Adicionado HttpService
   ) {
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!this.apiKey) {
@@ -456,5 +461,107 @@ export class GeminiService implements AIServiceInterface {
       this.logger.error('Erro ao gerar título:', error);
       return 'Nova Conversa';
     }
+  }
+
+  getProviderName(): string {
+    return "gemini";
+  }
+
+  async listModels(): Promise<ProviderModelInfo[]> {
+    this.logger.log('Listando modelos do Gemini...');
+    if (!this.apiKey) {
+      this.logger.warn('GEMINI_API_KEY não configurada. Não é possível listar modelos.');
+      return [];
+    }
+
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000; // 5 segundos
+
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(`Tentativa ${attempt} de listar modelos do Gemini.`);
+        const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+        if (!apiKey) {
+          this.logger.error('Chave API Gemini (GEMINI_API_KEY) não encontrada nas variáveis de ambiente.');
+          return []; // Retorna array vazio se a chave não estiver configurada
+        }
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        
+        this.logger.debug(`Chamando API Gemini: GET ${url.replace(apiKey, 'REDACTED_API_KEY')}`);
+
+        const response = await firstValueFrom(this.httpService.get(url));
+        
+        this.logger.debug(`Resposta da API Gemini (status ${response.status}):`, response.data);
+
+        if (!response.data || !response.data.models) {
+          this.logger.error('Resposta da API Gemini não contém a propriedade "models" ou está vazia.');
+          throw new Error('Resposta inválida da API Gemini: propriedade "models" ausente.');
+        }
+
+        const modelsFromApi = response.data.models;
+
+        const providerModels: ProviderModelInfo[] = modelsFromApi.map((model: any) => {
+          // Determinar capacidades
+          const modelNameString = model.name || '';
+          const cleanIdOrName = modelNameString.startsWith('models/') ? modelNameString.split('/')[1] : modelNameString;
+
+          let currentInputModalities = model.inputModalities || ['text'];
+          // Gemini 1.5 Flash e Pro são multimodais (texto, imagem)
+          if (cleanIdOrName.includes('gemini-1.5-flash') || cleanIdOrName.includes('gemini-1.5-pro')) {
+            if (!currentInputModalities.includes('image')) {
+              currentInputModalities.push('image');
+            }
+          } else if (modelNameString.includes('vision')) { // Para modelos mais antigos como gemini-pro-vision
+             if (!currentInputModalities.includes('image')) {
+              currentInputModalities.push('image');
+            }
+          }
+
+
+          const capabilities: ProviderModelInfo['capabilities'] = {
+            vision: currentInputModalities.includes('image'), // Deriva 'vision' de inputModalities
+            // Gemini 1.5 Flash e Pro suportam 'tools'. A API pode ter um campo explícito como `tool_config`.
+            // Se não, inferimos pelo nome para os modelos conhecidos por suportarem.
+            tool_use: !!model.tool_config || cleanIdOrName.includes('gemini-1.5-flash') || cleanIdOrName.includes('gemini-1.5-pro'),
+            long_context: model.inputTokenLimit ? model.inputTokenLimit > 32000 : false,
+            grounding: modelNameString === 'models/aqa' || modelNameString.includes('grounding'),
+          };
+
+          return {
+            idOrName: cleanIdOrName,
+            label: model.displayName || cleanIdOrName, // Usar cleanIdOrName como fallback para label
+            description: model.description || 'N/A',
+            provider: 'gemini',
+            capabilities: capabilities,
+            contextLength: model.inputTokenLimit || undefined,
+            inputModalities: currentInputModalities,
+            outputModalities: model.outputModalities || ['text'],
+            raw: model, // Armazenar o objeto original do provedor
+          };
+        });
+        
+        this.logger.log(`Modelos do Gemini listados com sucesso na tentativa ${attempt}. Retornando ${providerModels.length} modelos.`);
+        return providerModels;
+
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          this.logger.error(`Erro Axios na tentativa ${attempt} de listar modelos do Gemini: ${error.message}`, error.response?.data);
+        } else {
+          this.logger.error(`Falha na tentativa ${attempt} de listar modelos do Gemini: ${error.message}`, error.stack);
+        }
+        
+        if (attempt === MAX_RETRIES) {
+          this.logger.error('Todas as tentativas de listar modelos do Gemini falharam.');
+          return []; // Retorna array vazio após todas as tentativas falharem
+        }
+        await delay(RETRY_DELAY_MS);
+      }
+    }
+    // Este ponto não deve ser alcançado se MAX_RETRIES > 0, mas para segurança:
+    this.logger.error('Loop de retry concluído inesperadamente sem sucesso ou falha final.');
+    return []; // Retorna array vazio
   }
 }

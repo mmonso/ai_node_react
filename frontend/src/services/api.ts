@@ -37,7 +37,7 @@ export const getConversation = async (id: number): Promise<Conversation> => {
   return response.data;
 };
 
-export const createConversation = async (title: string, modelId?: number): Promise<Conversation> => {
+export const createConversation = async (title: string, modelId?: string): Promise<Conversation> => {
   const response = await axios.post(`${API_URL}/conversations`, { title, modelId });
   return response.data;
 };
@@ -90,6 +90,16 @@ export const sendMessage = async (
   return response.data;
 };
 
+export const updateMessageContent = async (
+  messageId: string, // ou number, dependendo do tipo do ID da sua entidade Message
+  newContent: string
+): Promise<Message> => { // Certifique-se que o tipo Message aqui corresponde ao que a API retorna
+  const response = await axios.patch<Message>( // Use o seu cliente axios configurado
+    `${API_URL}/conversations/messages/${messageId}`, // Confirme este caminho do endpoint
+    { content: newContent }
+  );
+  return response.data;
+};
 // API de Arquivos 
 export const uploadFile = async (file: File): Promise<FileResponse> => {
   const formData = new FormData();
@@ -162,11 +172,13 @@ export const resetSystemPrompt = async (): Promise<void> => {
 
 // API de Modelos
 export const getModels = async (): Promise<Model[]> => {
+  console.log('API: Chamando getModels');
   const response = await axios.get(`${API_URL}/models`);
+  console.log('API: Resposta de getModels:', response.data);
   return response.data;
 };
 
-export const getModel = async (id: number): Promise<Model> => {
+export const getModel = async (id: string): Promise<Model> => {
   const response = await axios.get(`${API_URL}/models/${id}`);
   return response.data;
 };
@@ -176,14 +188,14 @@ export const getModelsByProvider = async (provider: string): Promise<Model[]> =>
   return response.data;
 };
 
-export const updateModelAvailability = async (id: number, isAvailable: boolean): Promise<Model> => {
+export const updateModelAvailability = async (id: string, isAvailable: boolean): Promise<Model> => {
   const response = await axios.patch(`${API_URL}/models/${id}/availability`, { isAvailable });
   return response.data;
 };
 
 export const updateConversationModel = async (
   conversationId: number, 
-  modelId: number, 
+  modelId: string, 
   modelConfig?: ModelConfig
 ): Promise<Conversation> => {
   console.log(`API: Atualizando modelo da conversa ${conversationId} para modelo ${modelId}`, { modelConfig });
@@ -210,28 +222,28 @@ export const updateConversationModel = async (
 
 // API de Modelo Ativo Global
 export const getActiveModel = async (): Promise<{ model: Model | null; config: any }> => {
-  console.log('API: Obtendo modelo ativo global');
+  console.log('API: Chamando getActiveModel');
   try {
     const response = await axios.get(`${API_URL}/active-model`);
-    console.log('API: Modelo ativo obtido:', response.data);
+    console.log('API: Resposta de getActiveModel:', response.data);
     return response.data;
   } catch (error) {
-    console.error('API: Erro ao obter modelo ativo:', error);
+    console.error('API: Erro ao obter modelo ativo global:', error);
     return { model: null, config: null };
   }
 };
 
-export const setActiveModel = async (modelId: number, modelConfig?: any): Promise<{ model: Model | null; config: any }> => {
-  console.log(`API: Definindo modelo ativo global para ID=${modelId}`, { modelConfig });
+export const setActiveModel = async (modelId: string, modelConfig?: any): Promise<{ model: Model | null; config: any }> => {
+  console.log(`API: Chamando setActiveModel com ID=${modelId}, Config:`, modelConfig);
   try {
-    const response = await axios.post(`${API_URL}/active-model`, { 
-      modelId, 
-      modelConfig 
+    const response = await axios.post(`${API_URL}/active-model`, {
+      modelId,
+      modelConfig
     });
-    console.log('API: Modelo ativo definido:', response.data);
+    console.log('API: Resposta de setActiveModel:', response.data);
     return response.data;
   } catch (error) {
-    console.error('API: Erro ao definir modelo ativo:', error);
+    console.error('API: Erro ao definir modelo ativo global:', error);
     return { model: null, config: null };
   }
 };

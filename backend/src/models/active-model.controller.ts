@@ -14,7 +14,7 @@ export class ActiveModelController {
   }
 
   @Post()
-  async setActiveModel(@Body() body: { modelId: number; modelConfig?: any }) {
+  async setActiveModel(@Body() body: { modelId: string; modelConfig?: any }) {
     this.logger.log(`Definindo modelo ativo: ID=${body.modelId}`);
     return this.activeModelService.setActiveModel(body.modelId, body.modelConfig);
   }
@@ -25,4 +25,4 @@ export class ActiveModelController {
     this.activeModelService.updateActiveModelConfig(modelConfig);
     return { success: true };
   }
-} 
+}

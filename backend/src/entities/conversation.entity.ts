@@ -31,8 +31,8 @@ export class Conversation {
   @JoinColumn({ name: 'modelId' })
   model: Model;
 
-  @Column({ type: 'int', nullable: true })
-  modelId: number;
+  @Column({ type: 'varchar', nullable: true })
+  modelId: string;
 
   @Column({ type: 'simple-json', nullable: true })
   modelConfig: {

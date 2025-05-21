@@ -5,12 +5,12 @@ const GlobalStyles = createGlobalStyle`
     /* Tema Escuro Padrão */
     --primary-bg-dark: #121212;
     --secondary-bg-dark: #1e1e1e;
-    --tertiary-bg-dark: #252525; /* Para fundos de mensagens de bot, etc. */
+    --tertiary-bg-dark: #252525;
     --border-color-dark: #333;
     --primary-text-dark: #ffffff;
     --secondary-text-dark: #aaaaaa;
-    --accent-color-dark: #5d6b85; /* Substituindo o roxo por um azul-acinzentado escuro */
-    --accent-hover-dark: #4e5d77; /* Versão um pouco mais escura */
+    --accent-color-dark: #5d6b85;
+    --accent-hover-dark: #4e5d77;
     --success-color-dark: #4caf50;
     --error-color-dark: #f44336;
     --input-bg-dark: #1e1e1e;
@@ -19,8 +19,9 @@ const GlobalStyles = createGlobalStyle`
     --blockquote-bg-dark: rgba(93, 107, 133, 0.05); /* Ajustado para novo accent-color */
     --scrollbar-thumb-dark: #333;
     --scrollbar-thumb-hover-dark: #444;
-    --message-user-bg-dark: rgba(93, 107, 133, 0.2); /* Fundo da mensagem do usuário no tema escuro */
+    --message-user-bg-dark:  #2b2b2b; /* Fundo mais claro para mensagens do usuário no tema escuro */
     --message-user-text-dark: #ffffff; /* Cor do texto na mensagem do usuário no tema escuro */
+    --hover-bg-dark: #2b2b2b;
 
     /* Tema Claro */
     --primary-bg-light: #ffffff;
@@ -28,7 +29,7 @@ const GlobalStyles = createGlobalStyle`
     --tertiary-bg-light: #e9ecef; /* Para fundos de mensagens de bot, etc. */
     --border-color-light: #d1d5db; /* Um cinza mais claro para bordas */
     --primary-text-light: #111827; /* Texto escuro para contraste */
-    --secondary-text-light: #6b7280; /* Texto secundário um pouco mais claro */
+    --secondary-text-light:rgb(79, 84, 94); /* Texto secundário um pouco mais claro */
     --accent-color-light: #546a8c; /* Tom azul-acinzentado médio para o tema claro */
     --accent-hover-light: #455a7a; /* Versão mais escura */
     --success-color-light: #10b981;
@@ -39,8 +40,9 @@ const GlobalStyles = createGlobalStyle`
     --blockquote-bg-light: rgba(84, 106, 140, 0.05); /* Ajustado para novo accent-color */
     --scrollbar-thumb-light: #cbd5e1;
     --scrollbar-thumb-hover-light: #9ca3af;
-    --message-user-bg-light: rgba(71, 85, 105, 0.6); /* Aumentando ainda mais a opacidade para um fundo mais escuro */
-    --message-user-text-light: #f8fafc; /* Cor do texto na mensagem do usuário no tema claro */
+    --message-user-bg-light: rgba(0, 0, 0, 0.1); /* Fundo mais claro para mensagens do usuário no tema claro */
+    --message-user-text-light: #111827; /* Cor do texto na mensagem do usuário no tema claro */
+    --hover-bg-light: rgba(0, 0, 0, 0.1); /* Aumentado de 0.05 para 0.1 */
 
     /* Variáveis dinâmicas que mudarão com o tema */
     --primary-bg: var(--primary-bg-dark);
@@ -59,6 +61,7 @@ const GlobalStyles = createGlobalStyle`
     --blockquote-bg: var(--blockquote-bg-dark);
     --scrollbar-thumb: var(--scrollbar-thumb-dark);
     --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-dark);
+    --hover-bg: var(--hover-bg-dark);
     
     /* Variáveis que não mudam com o tema (ou são específicas) */
     --message-user-bg: var(--message-user-bg-dark); /* Usando a nova variável */
@@ -82,6 +85,7 @@ const GlobalStyles = createGlobalStyle`
     --blockquote-bg: var(--blockquote-bg-light);
     --scrollbar-thumb: var(--scrollbar-thumb-light);
     --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-light);
+    --hover-bg: var(--hover-bg-light);
 
     --message-user-bg: var(--message-user-bg-light); /* Usando a nova variável */
     --message-user-text: var(--message-user-text-light); /* Usando a nova variável */

@@ -10,6 +10,7 @@ import { ActiveModelController } from './active-model.controller';
 import { GeminiModule } from '../gemini/gemini.module';
 import { OpenAIModule } from '../openai/openai.module';
 import { AnthropicModule } from '../anthropic/anthropic.module';
+// ModelSyncService não é mais importado
 
 @Module({
   imports: [
@@ -19,7 +20,19 @@ import { AnthropicModule } from '../anthropic/anthropic.module';
     AnthropicModule,
   ],
   controllers: [ModelsController, ActiveModelController],
-  providers: [ModelsService, AIServiceFactory, AIProviderService, ActiveModelService],
-  exports: [ModelsService, AIServiceFactory, AIProviderService, ActiveModelService],
+  providers: [
+    ModelsService,
+    AIServiceFactory,
+    AIProviderService,
+    ActiveModelService,
+    // ModelSyncService removido dos providers
+  ],
+  exports: [
+    ModelsService,
+    AIServiceFactory,
+    AIProviderService,
+    ActiveModelService,
+    // ModelSyncService removido dos exports
+  ],
 })
-export class ModelsModule {} 
+export class ModelsModule {}

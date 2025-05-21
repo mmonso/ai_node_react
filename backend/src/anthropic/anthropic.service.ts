@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Message } from '../entities/message.entity';
 import { AIServiceInterface } from '../models/ai-service.interface';
 import { Model } from '../entities/model.entity';
+import { ProviderApiService, ProviderModelInfo } from '../models/provider-api.service.interface';
 
 @Injectable()
-export class AnthropicService implements AIServiceInterface {
+export class AnthropicService implements AIServiceInterface, ProviderApiService {
   private apiKey: string;
   private readonly logger = new Logger(AnthropicService.name);
 
@@ -18,6 +19,87 @@ export class AnthropicService implements AIServiceInterface {
     } else {
       this.logger.log('Serviço Anthropic inicializado com sucesso');
     }
+  }
+
+  getProviderName(): string {
+    return "anthropic";
+  }
+
+  async listModels(): Promise<ProviderModelInfo[]> {
+    this.logger.log('Listando modelos do Anthropic (mock)...');
+    if (!this.apiKey) {
+      this.logger.warn('ANTHROPIC_API_KEY não configurada. Não é possível listar modelos.');
+      return [];
+    }
+
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000; // 5 segundos
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(`Tentativa ${attempt} de listar modelos do Anthropic (mock).`);
+        // Simulação de chamada de API
+        await delay(200); // Simula latência da rede
+
+        // Mock de dados para modelos Anthropic
+        const mockModels: ProviderModelInfo[] = [
+          {
+            idOrName: 'claude-3-opus-20240229',
+            label: 'Claude 3 Opus',
+            description: 'Most powerful model for highly complex tasks.',
+            capabilities: { vision: true, tool_use: true },
+            contextLength: 200000,
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            raw: { provider_id: 'claude-3-opus-20240229', lifecycle: 'ga' },
+          },
+          {
+            idOrName: 'claude-3-5-sonnet-20240620',
+            label: 'Claude 3.5 Sonnet',
+            description: 'Most intelligent model, 2x faster than Opus for most workloads.',
+            capabilities: { vision: true, tool_use: true },
+            contextLength: 200000,
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            raw: { provider_id: 'claude-3-5-sonnet-20240620', lifecycle: 'ga' },
+            isDefaultVersion: true,
+          },
+          {
+            idOrName: 'claude-3-sonnet-20240229',
+            label: 'Claude 3 Sonnet',
+            description: 'Balanced model for intelligence and speed.',
+            capabilities: { vision: true, tool_use: true },
+            contextLength: 200000,
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            raw: { provider_id: 'claude-3-sonnet-20240229', lifecycle: 'ga' },
+          },
+          {
+            idOrName: 'claude-3-haiku-20240307',
+            label: 'Claude 3 Haiku',
+            description: 'Fastest and most compact model for near-instant responsiveness.',
+            capabilities: { vision: true },
+            contextLength: 200000,
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            raw: { provider_id: 'claude-3-haiku-20240307', lifecycle: 'ga' },
+          },
+        ];
+        
+        this.logger.log(`Modelos mockados do Anthropic retornados com sucesso na tentativa ${attempt}.`);
+        return mockModels;
+
+      } catch (error) {
+        this.logger.error(`Erro ao listar modelos Anthropic (mock) na tentativa ${attempt}: ${error.message}`);
+        if (attempt === MAX_RETRIES) {
+          this.logger.error('Máximo de tentativas atingido. Falha ao listar modelos Anthropic.');
+          throw new Error(`Falha ao listar modelos Anthropic após ${MAX_RETRIES} tentativas: ${error.message}`);
+        }
+        await delay(RETRY_DELAY_MS);
+      }
+    }
+    return []; // Retorno caso todas as tentativas falhem (não deve acontecer com mock)
   }
 
   async generateResponse(
@@ -67,7 +149,7 @@ export class AnthropicService implements AIServiceInterface {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-haiku-20240307', // Usar um modelo rápido para títulos
           max_tokens: 30,
           temperature: 0.2,
           messages: [
@@ -121,4 +203,4 @@ export class AnthropicService implements AIServiceInterface {
       return 'Nova Conversa';
     }
   }
-} 
+}

@@ -3,6 +3,8 @@ import styled from 'styled-components';
 import { Model, ModelConfig } from '../types';
 import { getModels } from '../services/api';
 import { useAppContext } from '../context/AppContext';
+import { StyledButtonBase } from './common/StyledButtonBase';
+import { OpenAIIcon, AnthropicIcon, GoogleIcon } from './icons';
 
 interface ModelSidebarProps {
   isOpen: boolean;
@@ -16,7 +18,7 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
   onToggle,
 }) => {
   const [models, setModels] = useState<Model[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<number | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [providers, setProviders] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,7 +48,7 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
       try {
         console.log('ModelSidebar: Carregando modelos...');
         const allModels = await getModels();
-        console.log('ModelSidebar: Modelos carregados:', allModels.length);
+        console.log(`ModelSidebar: Modelos carregados: ${allModels.length}`, allModels); // Log detalhado
         setModels(allModels);
         
         // Extrair provedores únicos dos modelos
@@ -85,28 +87,49 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
     };
   }, [isOpen, onClose]);
   
-  const handleSelectModel = (modelId: number) => {
-    console.log(`ModelSidebar: Modelo selecionado manualmente: ${modelId}`);
+  const handleSelectModel = (modelId: string) => {
+    console.log(`ModelSidebar: Modelo selecionado com ID: ${modelId}`);
+    const modelDetails = models.find(model => model.id === modelId);
+    
+    if (!modelDetails) {
+      console.warn(`ModelSidebar: Modelo com ID ${modelId} não encontrado na lista de modelos carregados.`);
+      return;
+    }
+    
+    console.log('ModelSidebar: Detalhes do modelo encontrado para seleção:', modelDetails);
     setSelectedModelId(modelId);
-    const selectedModel = models.find(model => model.id === modelId);
-    if (selectedModel) {
-      // Se não tiver configuração personalizada ainda, usar a padrão do modelo
-      if (!modelConfig) {
-        console.log('ModelSidebar: Configurando com as configurações padrão do modelo');
-        setModelConfig({...selectedModel.defaultConfig});
-      }
+    
+    if (activeModel && activeModel.id === modelId && activeModelConfig) {
+      console.log('ModelSidebar: Usando activeModelConfig existente para o modelo selecionado:', activeModelConfig);
+      setModelConfig({ ...activeModelConfig });
+    } else {
+      console.log('ModelSidebar: Usando defaultConfig do modelo selecionado:', modelDetails.defaultConfig);
+      setModelConfig({ ...modelDetails.defaultConfig });
     }
   };
   
   const handleSaveModelSelection = async () => {
     if (!selectedModelId || !modelConfig) {
-      console.warn('ModelSidebar: Não é possível salvar - dados incompletos', { 
-        selectedModelId, hasModelConfig: !!modelConfig 
+      console.warn('ModelSidebar: Não é possível salvar - dados incompletos', {
+        selectedModelId,
+        hasModelConfig: !!modelConfig
       });
       return;
     }
     
-    console.log(`ModelSidebar: Salvando seleção de modelo global: modelId=${selectedModelId}`);
+    const selectedModel = models.find(model => model.id === selectedModelId);
+    if (!selectedModel) {
+      console.error('ModelSidebar: Modelo selecionado não encontrado na lista de modelos');
+      return;
+    }
+    
+    console.log(`ModelSidebar: Tentando salvar seleção de modelo global:`, {
+      modelId: selectedModelId,
+      modelName: selectedModel.name,
+      modelProvider: selectedModel.provider,
+      config: modelConfig
+    });
+    
     setIsSaving(true);
     try {
       const success = await setActiveModelWithId(selectedModelId, modelConfig);
@@ -156,7 +179,6 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
       {/* Conteúdo da barra lateral */}
       <SidebarContainer ref={sidebarRef}>
         <SidebarHeader>
-          <SidebarTitle>Escolha de Modelo</SidebarTitle>
           <CloseButton onClick={onClose}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -189,62 +211,18 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
           
           <Section>
             <SectionTitle>Modelos Disponíveis</SectionTitle>
-            <ModelsList>
+            <ModelSelect value={selectedModelId || ''} onChange={(e) => handleSelectModel(e.target.value)}>
+              <option value="" disabled>Selecione um modelo</option>
               {filteredModels.length > 0 ? (
-                filteredModels.map(model => (
-                  <ModelItem
-                    key={model.id}
-                    $selected={model.id === selectedModelId}
-                    onClick={() => handleSelectModel(model.id)}
-                  >
-                    <ModelName>{model.label}</ModelName>
-                    <ModelCapabilities>
-                      {model.capabilities.textInput && (
-                        <Capability title="Suporta entrada de texto">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 7V4h16v3"></path>
-                            <path d="M9 20h6"></path>
-                            <path d="M12 4v16"></path>
-                          </svg>
-                        </Capability>
-                      )}
-                      {model.capabilities.imageInput && (
-                        <Capability title="Suporta entrada de imagem">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                            <polyline points="21 15 16 10 5 21"></polyline>
-                          </svg>
-                        </Capability>
-                      )}
-                      {model.capabilities.fileInput && (
-                        <Capability title="Suporta upload de arquivos">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                          </svg>
-                        </Capability>
-                      )}
-                      {model.capabilities.webSearch && (
-                        <Capability title="Suporta pesquisa na web">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            <line x1="11" y1="8" x2="11" y2="14"></line>
-                            <line x1="8" y1="11" x2="14" y2="11"></line>
-                          </svg>
-                        </Capability>
-                      )}
-                    </ModelCapabilities>
-                  </ModelItem>
+                filteredModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
                 ))
               ) : (
-                <EmptyMessage>Nenhum modelo disponível para este provedor.</EmptyMessage>
+                <option value="" disabled>Nenhum modelo disponível</option>
               )}
-            </ModelsList>
+            </ModelSelect>
           </Section>
           
           {selectedModelId && modelConfig && (
@@ -255,14 +233,25 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
                   <ConfigLabel>Temperatura:</ConfigLabel>
                   <ConfigControl>
                     <input 
-                      type="range" 
+                      type="number" 
                       min="0" 
                       max="2" 
                       step="0.1" 
                       value={modelConfig.temperature} 
                       onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                      style={{
+                        width: '60px',
+                        padding: '0.25rem',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        backgroundColor: 'var(--primary-bg)',
+                        color: 'var(--secondary-text)',
+                        fontSize: '0.7rem',
+                        textAlign: 'right',
+                        letterSpacing: '0.5px',
+                        fontWeight: '500'
+                      }}
                     />
-                    <ConfigValue>{modelConfig.temperature.toFixed(1)}</ConfigValue>
                   </ConfigControl>
                 </ConfigRow>
                 
@@ -304,34 +293,49 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
                   <ConfigLabel>Máx. Tokens:</ConfigLabel>
                   <ConfigControl>
                     <input 
-                      type="range" 
+                      type="number" 
                       min="100" 
                       max="8000" 
                       step="100" 
                       value={modelConfig.maxOutputTokens} 
                       onChange={(e) => handleConfigChange('maxOutputTokens', parseInt(e.target.value))}
+                      style={{
+                        width: '80px',
+                        padding: '0.25rem',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        backgroundColor: 'var(--primary-bg)',
+                        color: 'var(--secondary-text)',
+                        fontSize: '0.7rem',
+                        textAlign: 'right',
+                        letterSpacing: '0.5px',
+                        fontWeight: '500'
+                      }}
                     />
-                    <ConfigValue>{modelConfig.maxOutputTokens}</ConfigValue>
                   </ConfigControl>
                 </ConfigRow>
                 
-                <ResetButton onClick={handleResetConfig}>
-                  Restaurar Padrões
-                </ResetButton>
+                <ResetButton onClick={handleResetConfig} title="Restaurar Padrões" />
               </ConfigForm>
             </Section>
           )}
         </SidebarContent>
         
         <SidebarFooter>
-          <CancelButton onClick={onClose} disabled={isSaving || isLoadingModel}>
-            Cancelar
+          <CancelButton onClick={onClose} disabled={isSaving || isLoadingModel} title="Cancelar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </CancelButton>
-          <SaveButton 
-            onClick={handleSaveModelSelection} 
+          <SaveButton
+            onClick={handleSaveModelSelection}
             disabled={isSaving || isLoadingModel || !selectedModelId}
+            title={isSaving || isLoadingModel ? 'Salvando...' : 'Aplicar Modelo'}
           >
-            {isSaving || isLoadingModel ? 'Salvando...' : 'Aplicar Modelo'}
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </SaveButton>
         </SidebarFooter>
       </SidebarContainer>
@@ -339,19 +343,15 @@ const ModelSidebar: React.FC<ModelSidebarProps> = ({
   );
 };
 
-// Função auxiliar para obter o rótulo do provedor
-function getProviderLabel(provider: string): string {
-  switch (provider.toLowerCase()) {
+function getProviderLabel(provider: string): string | React.ReactNode {
+  switch (provider) {
     case 'openai':
-      return 'OpenAI';
-    case 'gemini':
-      return 'Google Gemini';
+      return <OpenAIIcon size={20} />;
     case 'anthropic':
-      return 'Anthropic';
-    case 'deepseek':
-      return 'DeepSeek';
-    case 'grok':
-      return 'Grok';
+      return <AnthropicIcon size={20} />;
+    case 'google':
+    case 'gemini': // Adicionar case para 'gemini'
+      return <GoogleIcon size={20} />;
     default:
       return provider;
   }
@@ -472,13 +472,44 @@ const SidebarContent = styled.div`
   }
 `;
 
+const ModelSelect = styled.select`
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background-color: var(--primary-bg);
+  color: var(--secondary-text);
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+  }
+
+  option {
+    color: var(--secondary-text);
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+`;
+
 const Section = styled.div`
   margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  
+  &:last-child {
+    border-bottom: none;
+  }
 `;
 
 const SectionTitle = styled.h3`
-  margin: 0 0.25rem 0.5rem;
-  font-size: 0.7rem;
+  margin: 0 0.25rem 0.5rem 0.25rem;
+  font-size: 0.75rem;
   color: var(--secondary-text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -487,32 +518,56 @@ const SectionTitle = styled.h3`
 
 const ProviderSelector = styled.div`
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding: 0 0.25rem;
 `;
 
-const ProviderItem = styled.button<{ $selected: boolean }>`
-  background-color: ${({ $selected }) => ($selected ? 'var(--accent-color)' : 'transparent')};
-  color: ${({ $selected }) => ($selected ? 'white' : 'var(--primary-text)')};
-  padding: 0.35rem 0.75rem;
-  border-radius: 4px;
-  border: 1px solid ${({ $selected }) => ($selected ? 'var(--accent-color)' : 'var(--border-color)')};
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: ${({ $selected }) => ($selected ? '500' : '400')};
-  transition: all 0.2s ease;
-  opacity: ${({ $selected }) => ($selected ? '1' : '0.85')};
+const ProviderItem = styled(StyledButtonBase).attrs(props => ({
+  variant: 'icon',
+  size: 'medium'
+}))<{ $selected: boolean }>`
+  width: 48px;
+  height: 48px;
+  padding: 0;
   
-  &:hover {
-    background-color: ${({ $selected }) => ($selected ? 'var(--accent-color)' : 'var(--hover-bg)')};
-    opacity: 1;
-    border-color: ${({ $selected }) => ($selected ? 'var(--accent-color)' : 'var(--accent-color)')};
+  // Estilos baseados na seleção
+  background-color: ${props => props.$selected ? 'transparent' : 'transparent'}; // Fundo transparente para ambos os estados base
+  color: ${props => props.$selected ? 'var(--secondary-text)' : 'var(--primary-text)'}; // Cor do ícone é secondary-text se selecionado, senão primary-text
+  border: none; // Sem borda para ambos os estados base
+  opacity: ${props => props.$selected ? 1 : 0.1}; // Opacidade 0.1 se não selecionado, 1 se selecionado
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  svg {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px;
+    min-height: 24px;
+  }
+
+  &:hover:not(:disabled) {
+    opacity: ${props => props.$selected ? 1 : 0.4}; // Opacidade 0.6 no hover se não selecionado, senão 1
+    background-color: ${props => props.$selected ? 'transparent' : 'var(--hover-bg)'}; // Fundo transparente no hover se selecionado, senão --hover-bg
+
+    // Estilos específicos de hover baseados na seleção
+    color: ${props => props.$selected ? 'var(--secondary-text)' : 'var(--primary-text)'}; // Cor do ícone no hover é secondary-text se selecionado, senão primary-text
+    // border: none; // Sem borda no hover para ambos os estados (já definido no estado base)
+  }
+
+  &:focus {
+    outline: none;
+    border: none;
+    box-shadow: none;
   }
   
-  &:active {
-    transform: scale(0.98);
+  &:focus-visible {
+    outline: none;
+    border: none;
+    box-shadow: none;
   }
 `;
 
@@ -527,17 +582,22 @@ const ModelItem = styled.div<{ $selected: boolean }>`
   display: flex;
   flex-direction: column;
   padding: 0.6rem;
-  background-color: ${({ $selected }) => ($selected ? 'var(--hover-bg)' : 'transparent')};
-  border: 1px solid ${({ $selected }) => ($selected ? 'var(--accent-color)' : 'var(--border-color)')};
+  // Apply styles based on selection state
+  background-color: ${({ $selected }) => ($selected ? 'transparent' : 'transparent')}; // Fundo transparente para ambos os estados base
+  color: var(--primary-text); // Cor do texto é sempre primary-text
+  border: none; // Sem borda para ambos os estados base
+  opacity: ${({ $selected }) => ($selected ? 1 : 0.4)}; // Opacidade 1 se selecionado, 0.1 se não
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    border-color: var(--accent-color);
-    background-color: var(--hover-bg);
+    // Apply hover styles based on selection state
+    background-color: ${({ $selected }) => ($selected ? 'transparent' : 'var(--hover-bg)')}; // Fundo transparente no hover se selecionado, senão --hover-bg
+    color: var(--primary-text); // Cor do texto no hover é sempre primary-text
+    opacity: ${({ $selected }) => ($selected ? 1 : 0.6)}; // Opacidade 1 no hover se selecionado, 0.6 se não
   }
-  
+
   &:active {
     transform: scale(0.99);
   }
@@ -595,12 +655,14 @@ const ConfigForm = styled.div`
 
 const ConfigRow = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 `;
 
 const ConfigLabel = styled.label`
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   font-weight: 400;
   color: var(--secondary-text);
 `;
@@ -719,8 +781,9 @@ const ConfigValue = styled.span`
 const ResetButton = styled.button`
   background-color: transparent;
   color: var(--secondary-text);
-  border: 1px solid var(--border-color);
-  padding: 0.2rem 0.4rem;
+  opacity: 0.6; /* Adicionada opacidade para o estado normal */
+  border: none;
+  padding: 0.2rem;
   border-radius: 3px;
   cursor: pointer;
   font-size: 0.7rem;
@@ -728,7 +791,9 @@ const ResetButton = styled.button`
   align-self: flex-end;
   display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   
   &::before {
     content: "↺";
@@ -736,9 +801,9 @@ const ResetButton = styled.button`
   }
   
   &:hover {
-    background-color: var(--hover-bg);
-    color: var(--accent-color);
-    border-color: var(--accent-color);
+    background-color: transparent !important; /* Força o fundo transparente, mesmo no tema escuro */
+    color: var(--secondary-text); /* Alterado para cor do texto secundário no hover */
+    opacity: 1; /* Ícone totalmente opaco no hover */
   }
   
   &:active {
@@ -756,13 +821,18 @@ const SidebarFooter = styled.div`
 `;
 
 const ButtonBase = styled.button`
-  padding: 0.5rem 0.75rem;
+  padding: 0; /* Ajustado para botões de ícone */
   border-radius: 4px;
-  font-weight: 500;
+  /* font-weight: 500; */ /* Removido pois não há texto */
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.85rem;
-  
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.1s ease; /* Ajustada transição */
+  /* font-size: 0.85rem; */ /* Removido pois não há texto */
+  width: 32px; /* Largura padrão para botões de ícone */
+  height: 32px; /* Altura padrão para botões de ícone */
+  display: flex; /* Para centralizar o ícone */
+  align-items: center; /* Para centralizar o ícone */
+  justify-content: center; /* Para centralizar o ícone */
+
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -770,47 +840,60 @@ const ButtonBase = styled.button`
 `;
 
 const CancelButton = styled(ButtonBase)`
-  background-color: transparent;
-  color: var(--primary-text);
-  border: 1px solid var(--border-color);
+  background-color: transparent !important;
+  color: var(--secondary-text);
+  border: none;
+  opacity: 0.6;
   
   &:hover:not(:disabled) {
-    background-color: var(--hover-bg);
+    color: var(--secondary-text);
+    opacity: 1;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
   }
 `;
 
 const SaveButton = styled(ButtonBase)`
-  background-color: var(--accent-color);
-  color: white;
+  background-color: transparent !important;
+  color: var(--secondary-text);
   border: none;
-  min-width: 100px;
+  opacity: 0.6;
+  /* min-width: 100px; */ /* Removido */
   
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    color: var(--secondary-text);
+    opacity: 1;
   }
   
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: scale(0.95);
   }
 `;
 
 const CurrentModelInfo = styled.div`
-  padding: 0.6rem 0.75rem;
+  padding: 0.6rem 0.25rem;
   margin: 0 0 0.75rem;
-  background-color: var(--hover-bg);
-  border-radius: 4px;
   font-size: 0.85rem;
-  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
+  color: var(--secondary-text);
   
   span {
     color: var(--secondary-text);
     margin-right: 0.35rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
   }
   
   strong {
-    color: var(--accent-color);
+    color: var(--secondary-text);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     font-weight: 500;
   }
 `;

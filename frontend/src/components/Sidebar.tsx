@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import StyledButtonBase from './common/StyledButtonBase'; // Corrigido o caminho do import
 import { useAppContext } from '../context/AppContext';
-import { 
+import {
   getConversations, 
   createConversation, 
   updateConversation, 
@@ -16,6 +17,7 @@ import {
 } from '../services/api';
 import { Conversation, Folder } from '../types';
 import ReactDOM from 'react-dom';
+import SettingsModal from './SettingsModal';
 
 const SidebarContainer = styled.aside`
   width: 300px;
@@ -41,26 +43,31 @@ const SidebarHeader = styled.div`
   gap: 1rem;
 `;
 
+const LeftActions = styled.div`
+  margin-right: auto;
+`;
+
+const RightActions = styled.div`
+  margin-left: auto;
+`;
+
 const HeaderActions = styled.div`
   display: flex;
   gap: 0.5rem;
 `;
 
-const NewChatButton = styled.button`
+const NewChatButton = styled(StyledButtonBase).attrs(props => ({
+  variant: 'icon',
+  size: 'medium'
+}))`
   width: 48px;
   height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 0;
-  font-weight: 500;
-  background-color: transparent;
-  border: 1px solid var(--border-color, #ccc);
-  border-radius: 999px;
   color: var(--primary-text);
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-  opacity: 0.7;
+  background-color: transparent;
+  border: none;
+  opacity: 0.8;
+  transition: background-color 0.2s ease;
 
   svg {
     width: 20px !important;
@@ -69,15 +76,22 @@ const NewChatButton = styled.button`
     min-height: 20px;
   }
 
-  &:hover {
-    background-color: transparent;
-    border-color: var(--accent-color, #007bff);
-    color: var(--accent-color, #007bff);
+  &:hover:not(:disabled) {
+    background-color: var(--hover-bg);
+    border: none;
+    color: var(--primary-text);
   }
 
-  &:active {
-    background-color: transparent;
-    transform: scale(0.98);
+  &:focus {
+    outline: none;
+    border: none;
+    box-shadow: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border: none;
+    box-shadow: none;
   }
 `;
 
@@ -120,10 +134,10 @@ const MoreOptionsButton = styled.button`
   cursor: pointer;
   margin-left: auto;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: transparent;
     color: var(--primary-text);
   }
 `;
@@ -140,7 +154,6 @@ const FolderItemHeader = styled.div<{ $active?: boolean, $isEditing?: boolean }>
   min-height: 38px;
 
   &:hover {
-    background-color: var(--hover-bg);
     ${MoreOptionsButton} {
       opacity: 1;
     }
@@ -216,7 +229,6 @@ const ConversationItem = styled.div<{ $active: boolean }>`
   border-radius: 4px;
   
   &:hover {
-    background-color: rgba(255, 255, 255, 0.08);
     ${MoreOptionsButton} {
       opacity: 1;
     }
@@ -279,33 +291,32 @@ const ActionButtons = styled.div`
   }
 `;
 
-const ActionButton = styled.button`
-  background: transparent;
-  color: var(--secondary-text);
-  padding: 8px 10px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  cursor: pointer;
-  gap: 0.75rem;
+const ActionButton = styled(StyledButtonBase).attrs(props => ({
+  variant: 'tertiary',
+  size: 'small'
+}))`
   width: 100%;
-  font-size: 0.85rem;
-  border: none;
-  transition: color 0.2s ease;
+  justify-content: flex-start;
+  padding: 8px 10px; // Sobrescreve padding para manter o original
+  font-size: 0.85rem; // Mantém o font-size original
   
-  &:hover {
-    background: transparent;
-    color: var(--primary-text);
+  // Comportamento de cor original:
+  color: var(--secondary-text);
+  background-color: transparent; // Garante que seja transparente inicialmente
+  border: none; // Garante que não haja borda da variante tertiary (que por padrão é '1px solid transparent')
+
+  &:hover:not(:disabled) {
+    background-color: transparent; // Mantém fundo transparente no hover
+    color: var(--primary-text); // Muda para a cor primária do texto no hover
   }
-  
+
   svg {
     color: var(--accent-color);
     opacity: 0.7;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
+    width: 20px !important; // Mantém o tamanho original do SVG
+    height: 20px !important;
+    margin-right: 0.75rem; // Mantém o gap original como margin-right no SVG
+    // StyledButtonBase já define display: block para svg, o que é bom.
   }
 `;
 
@@ -377,7 +388,7 @@ const CreateFolderForm = styled.div`
   margin-bottom: 1rem;
 
   input {
-    width: calc(100% - 120px);
+    width: calc(100% - 120px); // Ajustar este cálculo se os botões mudarem de tamanho
     margin-right: 0.5rem;
     padding: 0.5rem;
     border-radius: 4px;
@@ -386,27 +397,7 @@ const CreateFolderForm = styled.div`
     color: var(--primary-text);
     font-size: 0.85rem;
   }
-  button {
-    padding: 0.5rem 0.75rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  button.primary {
-    border: 1px solid var(--accent-color);
-    background: var(--accent-color);
-    color: white;
-  }
-  button.secondary {
-    margin-left: 0.25rem;
-    border: 1px solid var(--border-color);
-    background: transparent;
-    color: var(--secondary-text);
-    &:hover {
-      background: var(--hover-bg);
-      color: var(--primary-text);
-    }
-  }
+  /* Estilos de botão removidos daqui, pois usaremos StyledButtonBase */
 `;
 
 // Componente de portal para o menu
@@ -639,7 +630,7 @@ const Sidebar: React.FC = () => {
   const [editingFolderName, setEditingFolderName] = useState('');
   const [moveToFolderMenuOpenForConvId, setMoveToFolderMenuOpenForConvId] = useState<number | null>(null);
   const [lastButtonRef, setLastButtonRef] = useState<HTMLElement | null>(null);
-
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const navigate = useNavigate();
   const { id: currentChatId } = useParams<{ id: string }>();
@@ -901,8 +892,18 @@ const Sidebar: React.FC = () => {
   return (
     <SidebarContainer>
       <SidebarHeader>
-        <div></div>
-        <HeaderActions>
+        <LeftActions>
+          <NewChatButton
+            onClick={() => setIsSettingsOpen(true)}
+            title="Configurações"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </NewChatButton>
+        </LeftActions>
+        <RightActions>
           <NewChatButton
             onClick={() => { setIsCreatingFolder(true); setActiveFolderId(null); setNewFolderName(''); }}
             title="Nova Pasta"
@@ -923,8 +924,12 @@ const Sidebar: React.FC = () => {
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </NewChatButton>
-        </HeaderActions>
+        </RightActions>
       </SidebarHeader>
+
+      {isSettingsOpen && (
+        <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+      )}
 
       <ScrollableContent>
         {isCreatingFolder && (
@@ -943,8 +948,15 @@ const Sidebar: React.FC = () => {
                 }
               }}
             />
-            <button className="primary" onClick={handleCreateFolder}>Criar</button>
-            <button className="secondary" onClick={() => { setIsCreatingFolder(false); setNewFolderName(''); }}>X</button>
+            <StyledButtonBase variant="primary" size="small" onClick={handleCreateFolder}>Criar</StyledButtonBase>
+            <StyledButtonBase
+              variant="tertiary"
+              size="small"
+              onClick={() => { setIsCreatingFolder(false); setNewFolderName(''); }}
+              style={{ marginLeft: '0.25rem' }} // Mantém a margem que existia
+            >
+              X
+            </StyledButtonBase>
           </CreateFolderForm>
         )}
 

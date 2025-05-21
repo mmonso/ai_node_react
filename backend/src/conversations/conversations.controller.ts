@@ -8,6 +8,7 @@ import { AIServiceFactory } from '../models/ai-service.factory';
 import { AIProviderService } from '../models/ai-provider.service';
 import * as path from 'path';
 import { ActiveModelService } from '../models/active-model.service';
+import { UpdateMessageDto } from './dto/update-message.dto'; // Adicionado UpdateMessageDto
 
 @Controller('conversations')
 export class ConversationsController {
@@ -32,7 +33,7 @@ export class ConversationsController {
   }
 
   @Post()
-  create(@Body() body: { title: string; modelId?: number }): Promise<Conversation> {
+  create(@Body() body: { title: string; modelId?: string }): Promise<Conversation> {
     return this.conversationsService.create(body.title, body.modelId);
   }
 
@@ -76,7 +77,7 @@ export class ConversationsController {
   @HttpCode(HttpStatus.OK)
   updateConversationModel(
     @Param('conversationId', ParseIntPipe) conversationId: number,
-    @Body() body: { modelId: number; modelConfig?: any },
+    @Body() body: { modelId: string; modelConfig?: any },
   ): Promise<Conversation> {
     this.logger.log(`Atualizando modelo da conversa ${conversationId} para ${body.modelId}`);
     return this.conversationsService.updateConversationModel(
@@ -219,5 +220,13 @@ export class ConversationsController {
     // Retorna todas as mensagens atualizadas
     const updatedConversation = await this.conversationsService.findOne(id);
     return updatedConversation.messages;
+  }
+
+  @Patch('messages/:messageId')
+  async updateMessage(
+    @Param('messageId') messageId: string,
+    @Body() updateMessageDto: UpdateMessageDto,
+  ): Promise<Message> {
+    return this.conversationsService.updateMessageContent(messageId, updateMessageDto);
   }
 }

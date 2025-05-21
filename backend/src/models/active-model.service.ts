@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Model } from '../entities/model.entity';
+import { ModelsService } from './models.service';
 
 /**
  * Serviço que gerencia o modelo ativo globalmente
@@ -10,12 +9,11 @@ import { Model } from '../entities/model.entity';
 @Injectable()
 export class ActiveModelService {
   private readonly logger = new Logger(ActiveModelService.name);
-  private activeModelId: number | null = null;
+  private activeModelId: string | null = null;
   private activeModelConfig: any = null;
   
   constructor(
-    @InjectRepository(Model)
-    private modelsRepository: Repository<Model>,
+    private readonly modelsService: ModelsService,
   ) {
     this.initDefaultModel();
   }
@@ -25,28 +23,26 @@ export class ActiveModelService {
    */
   private async initDefaultModel(): Promise<void> {
     try {
-      // Buscar o primeiro modelo Gemini disponível como padrão
-      const defaultModel = await this.modelsRepository.findOne({
-        where: { 
-          provider: 'gemini',
-          isAvailable: true 
-        }
-      });
+      // Buscar todos os modelos disponíveis
+      const allModels = await this.modelsService.findAll();
+      
+      // Tentar encontrar um modelo Gemini primeiro
+      const defaultModel = allModels.find(model => 
+        model.provider === 'gemini' && model.isAvailable
+      );
       
       if (defaultModel) {
-        this.activeModelId = defaultModel.id;
+        this.activeModelId = defaultModel.name;
         this.activeModelConfig = defaultModel.defaultConfig;
-        this.logger.log(`Modelo padrão inicializado: ${defaultModel.name} (ID: ${defaultModel.id})`);
+        this.logger.log(`Modelo padrão inicializado: ${defaultModel.name}`);
       } else {
         // Se não encontrar um Gemini, pegar qualquer modelo disponível
-        const anyModel = await this.modelsRepository.findOne({
-          where: { isAvailable: true }
-        });
+        const anyModel = allModels.find(model => model.isAvailable);
         
         if (anyModel) {
-          this.activeModelId = anyModel.id;
+          this.activeModelId = anyModel.name;
           this.activeModelConfig = anyModel.defaultConfig;
-          this.logger.log(`Modelo padrão inicializado: ${anyModel.name} (ID: ${anyModel.id})`);
+          this.logger.log(`Modelo padrão inicializado: ${anyModel.name}`);
         } else {
           this.logger.warn('Nenhum modelo disponível encontrado para inicialização');
         }
@@ -65,10 +61,15 @@ export class ActiveModelService {
     }
     
     if (this.activeModelId) {
-      const model = await this.modelsRepository.findOneBy({ id: this.activeModelId });
+      const model = await this.modelsService.findOne(this.activeModelId);
+      if (!model) {
+        this.logger.warn(`Modelo ativo não encontrado: ${this.activeModelId}`);
+        await this.initDefaultModel();
+        return this.getActiveModel();
+      }
       return { 
         model, 
-        config: this.activeModelConfig || model?.defaultConfig 
+        config: this.activeModelConfig || model.defaultConfig 
       };
     }
     
@@ -78,9 +79,9 @@ export class ActiveModelService {
   /**
    * Define o modelo ativo atual
    */
-  async setActiveModel(modelId: number, modelConfig?: any): Promise<{ model: Model | null; config: any }> {
+  async setActiveModel(modelId: string, modelConfig?: any): Promise<{ model: Model | null; config: any }> {
     try {
-      const model = await this.modelsRepository.findOneBy({ id: modelId });
+      const model = await this.modelsService.findOne(modelId);
       
       if (!model) {
         this.logger.warn(`Modelo com ID ${modelId} não encontrado`);

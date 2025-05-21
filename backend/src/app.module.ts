@@ -21,9 +21,11 @@ import { Config } from './entities/config.entity';
 import { Folder } from './entities/folder.entity'; // Import Folder entity
 import { Model } from './entities/model.entity'; // Import Model entity
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     NestConfigModule.forRoot({
       isGlobal: true,
     }),

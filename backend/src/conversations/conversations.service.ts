@@ -9,6 +9,7 @@ import { ConfigService } from '../config/config.service';
 import { AIServiceFactory } from '../models/ai-service.factory';
 import { AIProviderService } from '../models/ai-provider.service';
 import { ActiveModelService } from '../models/active-model.service';
+import { UpdateMessageDto } from './dto/update-message.dto'; // Adicionado UpdateMessageDto
 
 @Injectable()
 export class ConversationsService {
@@ -43,7 +44,7 @@ export class ConversationsService {
     });
   }
 
-  async create(title: string, modelId?: number): Promise<Conversation> {
+  async create(title: string, modelId?: string): Promise<Conversation> {
     const conversation = this.conversationsRepository.create({ title });
     
     if (modelId) {
@@ -198,7 +199,7 @@ export class ConversationsService {
   
   // --- Métodos para Modelos ---
   
-  async updateConversationModel(conversationId: number, modelId: number, modelConfig?: any): Promise<Conversation> {
+  async updateConversationModel(conversationId: number, modelId: string, modelConfig?: any): Promise<Conversation> {
     this.logger.log(`Atualizando modelo da conversa ${conversationId} para modelId=${modelId}`);
     
     const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
@@ -241,5 +242,27 @@ export class ConversationsService {
     conversation.updatedAt = new Date();
     
     return this.conversationsRepository.save(conversation);
+  }
+
+  async updateMessageContent(
+    messageId: string, // ou number, dependendo do tipo do ID da sua entidade Message
+    updateMessageDto: UpdateMessageDto,
+  ): Promise<Message> {
+    // O ID da entidade Message é number, então precisamos converter messageId
+    const numericMessageId = parseInt(messageId, 10);
+    if (isNaN(numericMessageId)) {
+      throw new NotFoundException(`Invalid Message ID format: "${messageId}"`);
+    }
+
+    const message = await this.messagesRepository.findOne({ where: { id: numericMessageId } });
+
+    if (!message) {
+      throw new NotFoundException(`Message with ID "${numericMessageId}" not found`);
+    }
+
+    message.content = updateMessageDto.content;
+    // Nenhuma outra alteração na entidade Message é necessária (ex: updatedAt)
+
+    return this.messagesRepository.save(message);
   }
 }

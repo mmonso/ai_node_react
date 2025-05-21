@@ -314,6 +314,19 @@ const ChatPage: React.FC = () => {
     }
   };
   
+const updateMessageInConversation = (updatedMessage: Message) => {
+    setConversation(prevConversation => {
+      if (prevConversation && prevConversation.messages) {
+        return {
+          ...prevConversation,
+          messages: prevConversation.messages.map(msg =>
+            msg.id === updatedMessage.id ? updatedMessage : msg
+          ),
+        };
+      }
+      return prevConversation;
+    });
+  };
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -368,9 +381,10 @@ const ChatPage: React.FC = () => {
             <>
               {/* Renderiza todas as mensagens existentes */}
               {conversation?.messages?.map((message) => (
-                <ChatMessage 
-                  key={message.id} 
+                <ChatMessage
+                  key={message.id}
                   message={message}
+                  onUpdateMessage={updateMessageInConversation}
                 />
               ))}
               

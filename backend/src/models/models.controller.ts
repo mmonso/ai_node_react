@@ -1,10 +1,16 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common'; // Removido HttpCode, HttpStatus
 import { ModelsService } from './models.service';
+// ModelSyncService não é mais necessário aqui se o endpoint for removido
 import { Model } from '../entities/model.entity';
 
 @Controller('models')
 export class ModelsController {
-  constructor(private readonly modelsService: ModelsService) {}
+  constructor(
+    private readonly modelsService: ModelsService,
+    // private readonly modelSyncService: ModelSyncService, // Não injetar mais ModelSyncService
+  ) {}
+
+  // Endpoint @Post('sync-now') removido
 
   @Get()
   findAll(): Promise<Model[]> {
@@ -12,7 +18,7 @@ export class ModelsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<Model> {
+  findOne(@Param('id') id: string): Promise<Model> {
     return this.modelsService.findOne(id);
   }
 
@@ -23,14 +29,14 @@ export class ModelsController {
 
   @Put(':id')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() modelData: Partial<Model>,
   ): Promise<Model> {
     return this.modelsService.update(id, modelData);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+  remove(@Param('id') id: string): Promise<void> {
     return this.modelsService.remove(id);
   }
 } 

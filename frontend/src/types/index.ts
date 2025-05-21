@@ -6,7 +6,7 @@ export interface Conversation {
   messages: Message[];
   folderId?: number | null;
   folder?: Folder | null;
-  modelId?: number | null;
+  modelId?: string | null;
   model?: Model | null;
   modelConfig?: ModelConfig | null;
 }
@@ -51,7 +51,7 @@ export interface Config {
 }
 
 export interface Model {
-  id: number;
+  id: string;
   provider: string;
   name: string;
   label: string;
@@ -61,6 +61,7 @@ export interface Model {
     imageInput: boolean;
     fileInput: boolean;
     webSearch: boolean;
+    tool_use?: boolean;
   };
   defaultConfig: ModelConfig;
   createdAt: string;
