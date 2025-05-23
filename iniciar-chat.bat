@@ -1,0 +1,3 @@
+@echo off
+echo Iniciando o Chatbot...
+npm run start:dev 
