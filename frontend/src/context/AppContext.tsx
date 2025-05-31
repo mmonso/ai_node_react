@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { Model, ModelConfig } from '../types';
+import { Model, ModelConfig, Folder } from '../types'; // Adicionar Folder
 import { getActiveModel, setActiveModel as apiSetActiveModel, updateActiveModelConfig as apiUpdateActiveModelConfig } from '../services/api';
+
+import { Conversation } from '../types'; // Importar Conversation
 
 interface AppContextType {
   reloadTrigger: number; // Um contador para disparar reloads
@@ -10,6 +12,17 @@ interface AppContextType {
   setActiveModelWithId: (modelId: string, config?: ModelConfig) => Promise<boolean>;
   updateActiveConfig: (config: ModelConfig) => Promise<boolean>;
   isLoadingModel: boolean;
+  conversations: Conversation[];
+  setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  folders: Folder[]; // Adicionado
+  setFolders: React.Dispatch<React.SetStateAction<Folder[]>>; // Adicionado
+  personas: Conversation[];
+  setPersonas: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  // TODO: Adicionar funções para CRUD de Folders
+  // fetchFolders: () => Promise<void>;
+  // createFolder: (folderData: Omit<Folder, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<Folder | null>;
+  // updateFolder: (folderId: number, folderData: Partial<Omit<Folder, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) => Promise<Folder | null>;
+  // deleteFolder: (folderId: number) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -19,6 +32,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [activeModelConfig, setActiveModelConfig] = useState<ModelConfig | null>(null);
   const [isLoadingModel, setIsLoadingModel] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]); // Adicionado
+  const [personas, setPersonas] = useState<Conversation[]>([]);
 
   // Função estável para disparar o reload incrementando o contador
   const triggerReload = useCallback(() => {
@@ -95,14 +111,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     // Fornece o contador e a função para dispará-lo
-    <AppContext.Provider value={{ 
-      reloadTrigger, 
+    <AppContext.Provider value={{
+      reloadTrigger,
       triggerReload,
       activeModel,
       activeModelConfig,
       setActiveModelWithId,
       updateActiveConfig,
-      isLoadingModel
+      isLoadingModel,
+      conversations,
+      setConversations,
+      folders, // Adicionado
+      setFolders, // Adicionado
+      personas,
+      setPersonas
+      // TODO: Adicionar funções CRUD de Folders ao valor do contexto
     }}>
       {children}
     </AppContext.Provider>

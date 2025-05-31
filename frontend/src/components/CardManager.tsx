@@ -162,9 +162,9 @@ const MinimizedCardButton = styled.button`
   font-weight: bold;
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--card-shadow);
   transition: transform 0.2s, background-color 0.2s;
-  
+ 
   &:hover {
     transform: scale(1.1);
     background-color: var(--accent-hover);
@@ -186,7 +186,7 @@ const AddCardButton = styled.button`
   justify-content: center;
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--card-shadow);
   transition: transform 0.2s, background-color 0.2s;
   z-index: 1000;
   

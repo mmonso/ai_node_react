@@ -2,9 +2,9 @@ import React from 'react'; // Adicionado import do React
 import styled, { css } from 'styled-components';
 
 export interface StyledButtonBaseProps {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'icon';
-  size?: 'small' | 'medium' | 'large';
-  fullWidth?: boolean; // Nova propriedade para botões que ocupam 100% da largura
+  $variant?: 'primary' | 'secondary' | 'tertiary' | 'icon';
+  $size?: 'small' | 'medium' | 'large';
+  $fullWidth?: boolean; // Nova propriedade para botões que ocupam 100% da largura
 }
 
 // --- Variáveis de Cor (Exemplos - Ajustar conforme o tema do projeto) ---
@@ -99,27 +99,27 @@ const iconButtonStyles = css`
 `;
 
 const sizeStyles = (props: StyledButtonBaseProps) => {
-  switch (props.size) {
+  switch (props.$size) {
     case 'small':
       return css`
         padding: 0.35rem 0.7rem;
         font-size: 0.8rem;
         // Para botões de ícone pequenos, o padding do iconButtonStyles pode ser suficiente
-        // ou podemos ajustar aqui se props.variant === 'icon'
-        ${props.variant === 'icon' && css`padding: 0.4rem;`}
+        // ou podemos ajustar aqui se props.$variant === 'icon'
+        ${props.$variant === 'icon' && css`padding: 0.4rem;`}
       `;
     case 'large':
       return css`
         padding: 0.75rem 1.5rem;
         font-size: 1rem;
-        ${props.variant === 'icon' && css`padding: 0.6rem;`}
+        ${props.$variant === 'icon' && css`padding: 0.6rem;`}
       `;
     case 'medium':
     default:
       return css`
         padding: 0.5rem 1rem;
         font-size: 0.9rem;
-        ${props.variant === 'icon' && css`padding: 0.5rem;`}
+        ${props.$variant === 'icon' && css`padding: 0.5rem;`}
       `;
   }
 };
@@ -151,7 +151,7 @@ export const StyledButtonBase = styled.button<StyledButtonBaseProps>`
 
   // Aplica variante de estilo
   ${(props) => {
-    switch (props.variant) {
+    switch (props.$variant) {
       case 'primary':
         return primaryStyles;
       case 'secondary':
@@ -170,14 +170,14 @@ export const StyledButtonBase = styled.button<StyledButtonBaseProps>`
 
   // Aplica largura total se especificado
   ${(props) =>
-    props.fullWidth &&
+    props.$fullWidth &&
     css`
       width: 100%;
     `}
   
   // Para ícones dentro de botões com texto
   svg {
-    margin-right: ${(props) => (props.children && typeof props.children !== 'string' && React.Children.count(props.children) > 1 && props.variant !== 'icon' ? '0.5em' : '0')};
+    margin-right: ${(props) => (props.children && typeof props.children !== 'string' && React.Children.count(props.children) > 1 && props.$variant !== 'icon' ? '0.5em' : '0')};
     // Adiciona margem apenas se houver texto E não for um botão de ícone puro
     width: 1em; // Tamanho padrão do ícone relativo ao font-size do botão
     height: 1em;

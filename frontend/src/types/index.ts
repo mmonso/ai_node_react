@@ -4,19 +4,22 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   messages: Message[];
-  folderId?: number | null;
-  folder?: Folder | null;
   modelId?: string | null;
   model?: Model | null;
   modelConfig?: ModelConfig | null;
+  isPersona?: boolean;
+  systemPrompt?: string | null;
+  folderId?: number | null;
+  folder?: Folder | null;
 }
 
 export interface Folder {
   id: number;
   name: string;
+  systemPrompt?: string | null;
+  userId: string; // Ou o tipo correspondente do seu backend
   createdAt: string;
   updatedAt: string;
-  conversations?: Conversation[];
 }
 
 export interface Message {

@@ -7,9 +7,12 @@ import { Folder } from '../entities/folder.entity'; // Added Folder import
 import { Model } from '../entities/model.entity'; // Added Model import
 import { ConfigService } from '../config/config.service';
 import { AIServiceFactory } from '../models/ai-service.factory';
-import { AIProviderService } from '../models/ai-provider.service';
+// AIProviderService será removido se não for mais necessário diretamente aqui
 import { ActiveModelService } from '../models/active-model.service';
 import { UpdateMessageDto } from './dto/update-message.dto'; // Adicionado UpdateMessageDto
+import { MessageService } from './message.service'; // Adicionado MessageService
+import { AIResponseService } from './ai-response.service'; // Adicionado AIResponseService
+import { ConversationTitleService } from './conversation-title.service'; // Importar o novo serviço
 
 @Injectable()
 export class ConversationsService {
@@ -21,15 +24,16 @@ export class ConversationsService {
     @InjectRepository(Message)
     private messagesRepository: Repository<Message>,
     private configService: ConfigService,
-    @InjectRepository(Folder) // Inject Folder repository
-    private foldersRepository: Repository<Folder>,
     @InjectRepository(Model) // Inject Model repository
     private modelsRepository: Repository<Model>,
     private aiServiceFactory: AIServiceFactory,
-    private aiProviderService: AIProviderService,
+    // private aiProviderService: AIProviderService, // Removido se não for mais usado diretamente
     private activeModelService: ActiveModelService,
+    private messageService: MessageService, // Adicionado MessageService
+    private aiResponseService: AIResponseService, // Adicionado AIResponseService
+    private conversationTitleService: ConversationTitleService, // Injetar o novo serviço
   ) {}
- 
+  
   async findAll(): Promise<Conversation[]> {
     return this.conversationsRepository.find({
       order: { updatedAt: 'DESC' },
@@ -44,8 +48,16 @@ export class ConversationsService {
     });
   }
 
-  async create(title: string, modelId?: string): Promise<Conversation> {
-    const conversation = this.conversationsRepository.create({ title });
+  async findOneWithFolder(id: number): Promise<Conversation> {
+    return this.conversationsRepository.findOne({
+      where: { id },
+      relations: ['messages', 'model', 'folder'], // Inclui a relação 'folder'
+      order: { messages: { timestamp: 'ASC' } },
+    });
+  }
+
+  async create(title: string, modelId?: string, systemPrompt?: string, isPersona?: boolean): Promise<Conversation> {
+    const conversation = this.conversationsRepository.create({ title, systemPrompt, isPersona });
     
     if (modelId) {
       const model = await this.modelsRepository.findOneBy({ id: modelId });
@@ -59,11 +71,19 @@ export class ConversationsService {
     return this.conversationsRepository.save(conversation);
   }
 
-  async update(id: number, title: string): Promise<Conversation> {
-    await this.conversationsRepository.update(id, { 
-      title, 
-      updatedAt: new Date() 
-    });
+  async update(id: number, title: string, isPersona?: boolean, systemPrompt?: string | null): Promise<Conversation> {
+    const updatePayload: Partial<Conversation> = { title, updatedAt: new Date() };
+
+    if (isPersona !== undefined) {
+      updatePayload.isPersona = isPersona;
+    }
+
+    // Permitir que systemPrompt seja definido como null ou uma string
+    if (systemPrompt !== undefined) {
+      updatePayload.systemPrompt = systemPrompt;
+    }
+
+    await this.conversationsRepository.update(id, updatePayload);
     return this.findOne(id);
   }
 
@@ -80,189 +100,48 @@ export class ConversationsService {
   }
 
   async addUserMessage(conversationId: number, content: string, imageUrl?: string, fileUrl?: string): Promise<Message> {
-    const conversation = await this.findOne(conversationId);
-    
-    const message = this.messagesRepository.create({
-      content,
-      isUser: true,
-      imageUrl,
-      fileUrl,
-      conversation
+    const conversation = await this.conversationsRepository.findOne({
+      where: { id: conversationId },
+      relations: ['model', 'folder'],
     });
+
+    if (!conversation) {
+      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
+    }
     
-    await this.messagesRepository.save(message);
+    const message = await this.messageService.addUserMessage(conversation, content, imageUrl, fileUrl);
     await this.conversationsRepository.update(conversationId, { updatedAt: new Date() });
+
+    // Chamar o serviço de geração de título após adicionar a mensagem
+    // Precisamos garantir que 'conversation' tenha a relação 'messages' carregada
+    // ou que o ConversationTitleService lide com isso.
+    // O ConversationTitleService já espera 'conversation.messages', então precisamos garantir que esteja lá.
+    // Se 'conversation' já foi carregado com 'messages' no início do método, está ok.
+    // Se não, precisamos recarregar ou passar os dados necessários.
+    // Assumindo que 'conversation' já tem 'messages' populado ou que o title service
+    // fará uma verificação segura.
+    // Para garantir, vamos recarregar a conversa com as mensagens antes de chamar o title service,
+    // ou melhor, passar a conversa já carregada e o conteúdo da mensagem.
+    // O ConversationTitleService espera a entidade Conversation e o conteúdo da primeira mensagem.
+    // A lógica de quando chamar (ex: só na primeira mensagem) está dentro do ConversationTitleService.
+    
+    // Recarrega a conversa para garantir que 'messages' esteja atualizado para o ConversationTitleService
+    const updatedConversation = await this.findOne(conversationId); // findOne carrega as mensagens
+    if (updatedConversation) {
+       // A primeira mensagem é a que acabamos de adicionar.
+      await this.conversationTitleService.generateAndSetTitleIfNeeded(updatedConversation, content);
+    }
     
     return message;
   }
 
-  async addBotMessage(conversationId: number, content: string): Promise<Message> {
-    const conversation = await this.findOne(conversationId);
-    
-    // Verifica se o conteúdo é uma resposta estruturada com metadados de embasamento
-    let messageContent = content;
-    let groundingMetadata = null;
-    
-    try {
-      // Tenta parsear o conteúdo como JSON para verificar se contém metadados
-      const parsedContent = JSON.parse(content);
-      
-      // Se for um objeto com text e groundingMetadata, extrair esses valores
-      if (parsedContent && parsedContent.text && parsedContent.groundingMetadata) {
-        messageContent = parsedContent.text;
-        groundingMetadata = JSON.stringify(parsedContent.groundingMetadata);
-      }
-    } catch (e) {
-      // Se não for JSON válido, usa o conteúdo original
-      messageContent = content;
-    }
-    
-    const message = this.messagesRepository.create({
-      content: messageContent,
-      isUser: false,
-      conversation,
-      groundingMetadata
-    });
-    
-    await this.messagesRepository.save(message);
-    await this.conversationsRepository.update(conversationId, { updatedAt: new Date() });
-    
-    return message;
-  }
+  // O método generateAndSetTitleIfNeeded foi movido para ConversationTitleService.
 
-  async generateBotResponse(conversationId: number): Promise<Message> {
-    const conversation = await this.findOne(conversationId);
-    const messages = conversation.messages;
-    
-    const systemPrompt = await this.configService.getSystemPrompt();
-    
-    try {
-      // Obter o modelo ativo global e sua configuração
-      const { model: activeModel, config: activeModelConfig } = await this.activeModelService.getActiveModel();
-      
-      this.logger.debug(`Gerando resposta para conversa ${conversationId} usando modelo global ${activeModel?.name || 'não especificado'}`);
-      
-      // Usar o providerService para obter o serviço apropriado ao modelo ativo global
-      const aiService = await this.aiProviderService.getService(activeModel);
-      
-      this.logger.debug(`Serviço de IA obtido para ${activeModel?.provider || 'provedor desconhecido'}`);
-      
-      const response = await aiService.generateResponse(
-        messages,
-        systemPrompt,
-        false,
-        activeModel,
-        activeModelConfig
-      );
-      
-      return this.addBotMessage(conversationId, response);
-    } catch (error) {
-      this.logger.error(`Erro ao gerar resposta para conversa ${conversationId}:`, error);
-      // Se ocorrer um erro, cria uma mensagem de erro para não quebrar a conversa
-      return this.addBotMessage(
-        conversationId, 
-        `Erro ao gerar resposta: ${error.message || 'Falha na comunicação com a API'}`
-      );
-    }
-  }
+  // Os métodos addBotMessage e generateBotResponse foram movidos para AIResponseService
+  // e MessageService. O ConversationsController chamará AIResponseService.generateAndSaveBotResponse.
 
-  // --- Métodos para Pastas ---
-
-  async addConversationToFolder(conversationId: number, folderId: number): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-    if (!conversation) {
-      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
-    }
-
-    const folder = await this.foldersRepository.findOneBy({ id: folderId });
-    if (!folder) {
-      throw new NotFoundException(`Pasta com ID ${folderId} não encontrada.`);
-    }
-
-    conversation.folderId = folderId;
-    conversation.updatedAt = new Date(); // Atualiza timestamp
-    
-    return this.conversationsRepository.save(conversation);
-  }
-
-  async removeConversationFromFolder(conversationId: number): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-    if (!conversation) {
-      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
-    }
-
-    conversation.folderId = null; // Define como null para remover da pasta
-    conversation.updatedAt = new Date(); // Atualiza timestamp
-
-    return this.conversationsRepository.save(conversation);
-  }
-  
-  // --- Métodos para Modelos ---
-  
-  async updateConversationModel(conversationId: number, modelId: string, modelConfig?: any): Promise<Conversation> {
-    this.logger.log(`Atualizando modelo da conversa ${conversationId} para modelId=${modelId}`);
-    
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-    if (!conversation) {
-      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
-    }
-    
-    const model = await this.modelsRepository.findOneBy({ id: modelId });
-    if (!model) {
-      throw new NotFoundException(`Modelo com ID ${modelId} não encontrado.`);
-    }
-    
-    // Guardar o ID do modelo anterior para logging
-    const previousModelId = conversation.modelId;
-    
-    conversation.modelId = modelId;
-    conversation.model = model; // Importante: atualizar também a referência ao objeto do modelo
-    
-    // Se não foi fornecida uma configuração personalizada, usar a padrão do modelo
-    if (!modelConfig) {
-      conversation.modelConfig = model.defaultConfig;
-    } else {
-      conversation.modelConfig = modelConfig;
-    }
-    
-    conversation.updatedAt = new Date();
-    
-    this.logger.log(`Modelo da conversa ${conversationId} alterado: ${previousModelId} -> ${modelId} (${model.provider}/${model.name})`);
-    
-    return this.conversationsRepository.save(conversation);
-  }
-  
-  async updateModelConfig(conversationId: number, modelConfig: any): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-    if (!conversation) {
-      throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
-    }
-    
-    conversation.modelConfig = modelConfig;
-    conversation.updatedAt = new Date();
-    
-    return this.conversationsRepository.save(conversation);
-  }
-
-  async updateMessageContent(
-    messageId: string, // ou number, dependendo do tipo do ID da sua entidade Message
-    updateMessageDto: UpdateMessageDto,
-  ): Promise<Message> {
-    // O ID da entidade Message é number, então precisamos converter messageId
-    const numericMessageId = parseInt(messageId, 10);
-    if (isNaN(numericMessageId)) {
-      throw new NotFoundException(`Invalid Message ID format: "${messageId}"`);
-    }
-
-    const message = await this.messagesRepository.findOne({ where: { id: numericMessageId } });
-
-    if (!message) {
-      throw new NotFoundException(`Message with ID "${numericMessageId}" not found`);
-    }
-
-    message.content = updateMessageDto.content;
-    // Nenhuma outra alteração na entidade Message é necessária (ex: updatedAt)
-
-    return this.messagesRepository.save(message);
-  }
+  // Os métodos de gerenciamento de pastas foram movidos para ConversationFolderService.
+  // Os métodos de gerenciamento de modelos foram movidos para ConversationModelService.
+  // O método updateMessageContent foi movido para MessageService.
+  // O ConversationsController precisará chamar os respectivos serviços diretamente.
 }

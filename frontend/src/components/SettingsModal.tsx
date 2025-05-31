@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import styled, { css } from 'styled-components'; // Adicionado css
+import styled from 'styled-components';
 import { getSystemPrompt, updateSystemPrompt, resetSystemPrompt } from '../services/api';
 import { useTheme } from '../context/ThemeContext'; // Importar useTheme
 
 interface SettingsModalProps {
+  isOpen: boolean; // Adicionada a prop isOpen
   onClose: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { theme, toggleTheme } = useTheme(); // Usar o contexto do tema
   const [systemPrompt, setSystemPrompt] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -89,6 +90,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     }
   };
 
+  if (!isOpen) return null; // Renderiza condicionalmente o modal
+
   return (
     <ModalOverlay>
       <ModalContainer ref={modalRef}>
@@ -107,7 +110,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             <SettingsSection>
               <SectionTitle>Prompt do Sistema</SectionTitle>
               <SectionDescription>
-                Defina as instruções que controlam o comportamento do chatbot. 
+                Defina as instruções que controlam o comportamento do chatbot.
                 Este prompt é enviado no início de cada conversa.
               </SectionDescription>
               
@@ -242,7 +245,7 @@ const ModalContainer = styled.div`
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--modal-shadow);
   overflow: hidden;
 `;
 

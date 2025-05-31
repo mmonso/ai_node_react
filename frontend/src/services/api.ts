@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Conversation, Message, ModelConfig, FileResponse, Folder, Model } from '../types'; // Adicionado Model aqui
+import { Conversation, Message, ModelConfig, FileResponse, Model, Folder } from '../types'; // Adicionar Folder
 
 const API_URL = 'http://localhost:3001/api';
 const BASE_URL = 'http://localhost:3001'; // Base URL para arquivos estáticos
@@ -37,13 +37,23 @@ export const getConversation = async (id: number): Promise<Conversation> => {
   return response.data;
 };
 
-export const createConversation = async (title: string, modelId?: string): Promise<Conversation> => {
-  const response = await axios.post(`${API_URL}/conversations`, { title, modelId });
+export const createConversation = async (
+  title: string,
+  modelId?: string,
+  isPersona?: boolean,
+  systemPrompt?: string | null
+): Promise<Conversation> => {
+  const response = await axios.post(`${API_URL}/conversations`, { title, modelId, isPersona, systemPrompt });
   return response.data;
 };
 
-export const updateConversation = async (id: number, title: string): Promise<Conversation> => {
-  const response = await axios.put(`${API_URL}/conversations/${id}`, { title });
+export const updateConversation = async (
+  id: number,
+  title: string,
+  isPersona?: boolean,
+  systemPrompt?: string | null
+): Promise<Conversation> => {
+  const response = await axios.put(`${API_URL}/conversations/${id}`, { title, isPersona, systemPrompt });
   return response.data;
 };
 
@@ -130,13 +140,13 @@ export const getFolders = async (): Promise<Folder[]> => {
   return response.data;
 };
 
-export const createFolder = async (name: string): Promise<Folder> => {
-  const response = await axios.post(`${API_URL}/folders`, { name });
+export const createFolder = async (data: { name: string; systemPrompt?: string }): Promise<Folder> => {
+  const response = await axios.post(`${API_URL}/folders`, data);
   return response.data;
 };
 
-export const updateFolder = async (id: number, name: string): Promise<Folder> => {
-  const response = await axios.put(`${API_URL}/folders/${id}`, { name });
+export const updateFolder = async (id: number, data: Partial<{ name?: string; systemPrompt?: string }>): Promise<Folder> => {
+  const response = await axios.patch(`${API_URL}/folders/${id}`, data);
   return response.data;
 };
 
@@ -144,27 +154,19 @@ export const deleteFolder = async (id: number): Promise<void> => {
   await axios.delete(`${API_URL}/folders/${id}`);
 };
 
-export const addConversationToFolder = async (conversationId: number, folderId: number): Promise<Conversation> => {
-  try {
-    console.log(`API: Adicionando conversa ${conversationId} à pasta ${folderId}`);
+// Função para mover conversa para uma pasta (ou remover de uma pasta)
+export const moveConversationToFolder = async (conversationId: number, folderId: number | null): Promise<Conversation> => {
+  if (folderId === null) {
+    // Usa o endpoint DELETE para desassociar a conversa da pasta
+    const response = await axios.delete(`${API_URL}/conversations/${conversationId}/folder`);
+    return response.data;
+  } else {
+    // Usa o endpoint POST para associar a conversa a uma pasta
     const response = await axios.post(`${API_URL}/conversations/${conversationId}/folder/${folderId}`);
     return response.data;
-  } catch (error) {
-    console.error('Erro na API addConversationToFolder:', error);
-    throw error;
   }
 };
 
-export const removeConversationFromFolder = async (conversationId: number): Promise<Conversation> => {
-  try {
-    console.log(`API: Removendo conversa ${conversationId} da pasta`);
-    const response = await axios.delete(`${API_URL}/conversations/${conversationId}/folder`);
-    return response.data;
-  } catch (error) {
-    console.error('Erro na API removeConversationFromFolder:', error);
-    throw error;
-  }
-};
 
 export const resetSystemPrompt = async (): Promise<void> => {
   await axios.put(`${API_URL}/config/system-prompt/reset`);

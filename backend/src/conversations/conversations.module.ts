@@ -6,6 +6,11 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
+import { MessageService } from './message.service'; // Adicionado MessageService
+import { AIResponseService } from './ai-response.service'; // Adicionado AIResponseService
+import { ConversationFolderService } from './conversation-folder.service'; // Adicionado ConversationFolderService
+import { ConversationModelService } from './conversation-model.service'; // Adicionado ConversationModelService
+import { ConversationTitleService } from './conversation-title.service'; // Importar o novo serviço
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { Folder } from '../entities/folder.entity';
@@ -36,7 +41,21 @@ import { WebSearchModule } from '../web-search/web-search.module';
     }),
   ],
   controllers: [ConversationsController],
-  providers: [ConversationsService],
-  exports: [ConversationsService],
+  providers: [
+    ConversationsService,
+    MessageService,
+    AIResponseService,
+    ConversationFolderService,
+    ConversationModelService,
+    ConversationTitleService, // Adicionar aos providers
+  ],
+  exports: [
+    ConversationsService,
+    MessageService,
+    AIResponseService,
+    ConversationFolderService,
+    ConversationModelService,
+    ConversationTitleService, // Adicionar aos exports
+  ],
 })
-export class ConversationsModule {} 
+export class ConversationsModule {}

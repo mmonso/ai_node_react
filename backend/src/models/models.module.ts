@@ -14,7 +14,8 @@ import { AnthropicModule } from '../anthropic/anthropic.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Model]),
+    // TypeOrmModule.forFeature([Model]) foi removido pois ModelsService agora usa uma lista estática
+    // e nenhum outro serviço neste módulo injeta Repository<Model> diretamente.
     GeminiModule,
     OpenAIModule,
     AnthropicModule,

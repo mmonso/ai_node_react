@@ -4,9 +4,43 @@ import StyledButtonBase, { StyledButtonBaseProps } from './common/StyledButtonBa
 import { uploadFile } from '../services/api';
 import { ModelConfig } from '../types';
 
+// --- Constantes de Dimensionamento do TextArea ---
+const LINE_HEIGHT_MULTIPLIER = 1.5;
+const FONT_SIZE_REM = 1; // font-size base do textarea
+
+// Paddings do TextArea (em unidades rem para consistência no CSS)
+const PADDING_TOP_REM = 1.25; // Restaurado para 1.25rem
+const PADDING_RIGHT_REM = 1.25;
+const PADDING_LEFT_REM = 1.7;
+// const PADDING_BOTTOM_FOR_BUTTONS_REM = 2.8125; // Removido
+
+// Altura da área dos botões (8px padding + 36px botão + 8px padding = 52px = 3.25rem)
+const BUTTONS_AREA_HEIGHT_REM = 3.25;
+// Padding interno na parte de baixo do TextArea, para o texto não colar na "borda" da área de scroll
+const TEXTAREA_INTERNAL_PADDING_BOTTOM_REM = 0.75; // Restaurado para 0.75rem
+
+// Número de linhas de texto visíveis
+const MIN_VISIBLE_TEXT_LINES = 1;
+const MAX_VISIBLE_TEXT_LINES = 15;
+
+// Altura do conteúdo de texto (em rem)
+const singleLineTextHeightRem = FONT_SIZE_REM * LINE_HEIGHT_MULTIPLIER;
+const minContentTextHeightRem = MIN_VISIBLE_TEXT_LINES * singleLineTextHeightRem;
+const maxContentTextHeightRem = MAX_VISIBLE_TEXT_LINES * singleLineTextHeightRem;
+
+// Altura total do CSS para o TextArea (conteúdo + paddings verticais)
+const MIN_TEXTAREA_CSS_HEIGHT_STR = `calc(${minContentTextHeightRem}rem + ${PADDING_TOP_REM}rem + ${TEXTAREA_INTERNAL_PADDING_BOTTOM_REM}rem)`;
+const MAX_TEXTAREA_CSS_HEIGHT_STR = `calc(${maxContentTextHeightRem}rem + ${PADDING_TOP_REM}rem + ${TEXTAREA_INTERNAL_PADDING_BOTTOM_REM}rem)`;
+
+// Para lógica JS, precisamos de valores em PX. Assumindo 1rem = 16px.
+const PX_PER_REM = 16;
+const MIN_TEXTAREA_CALCULATED_PX = (minContentTextHeightRem + PADDING_TOP_REM + TEXTAREA_INTERNAL_PADDING_BOTTOM_REM) * PX_PER_REM;
+const MAX_TEXTAREA_CALCULATED_PX = (maxContentTextHeightRem + PADDING_TOP_REM + TEXTAREA_INTERNAL_PADDING_BOTTOM_REM) * PX_PER_REM;
+// --- Fim das Constantes de Dimensionamento ---
+
 const InputContainer = styled.div`
   position: relative;
-  padding: 1rem;
+  padding: 1rem; /* Restaurado para 1rem */
   background-color: var(--background);
   border-top: 1px solid var(--border-color);
 `;
@@ -15,40 +49,45 @@ const Form = styled.form`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex: 1;
+  /* flex: 1; // Removido para não expandir verticalmente */
 `;
 
 const InputWrapper = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* flex: 1; // Removido para não expandir verticalmente */
   background-color: var(--input-background);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  overflow: hidden;
+  border-radius: 32px;
+  overflow: hidden; /* Restaurado para clipping correto com border-radius */
   transition: border-color 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  
+  box-shadow: var(--input-shadow);
+  /* padding-bottom foi removido, o ButtonsContainer estará no fluxo normal */
+  box-sizing: border-box;
+ 
   &:focus-within {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 1px var(--accent-color, transparent);
   }
 `;
 
-const TextArea = styled.textarea<{ height: number }>`
+const TextArea = styled.textarea`
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 1rem;
+  padding: ${PADDING_TOP_REM}rem ${PADDING_RIGHT_REM}rem 0 ${PADDING_LEFT_REM}rem;
   background-color: transparent;
   color: var(--text-color);
   font-family: inherit;
-  font-size: 1rem;
+  font-size: ${FONT_SIZE_REM}rem;
+  line-height: ${LINE_HEIGHT_MULTIPLIER};
   resize: none;
   border: none;
-  height: ${props => props.height}px;
-  min-height: 44px;
-  max-height: 150px;
-  padding-bottom: 45px; /* Mais espaço para os botões */
+  min-height: ${MIN_TEXTAREA_CSS_HEIGHT_STR};
+  max-height: ${MAX_TEXTAREA_CSS_HEIGHT_STR};
+  padding-bottom: ${TEXTAREA_INTERNAL_PADDING_BOTTOM_REM}rem; /* Padding interno do textarea */
+  overflow-y: auto;
+  box-sizing: border-box;
+  /* flex-grow: 1; // Removido para que o TextArea não se expanda verticalmente quando vazio */
 
   &:focus {
     outline: none;
@@ -65,12 +104,11 @@ const ButtonsContainer = styled.div`
   padding: 8px 16px;
   gap: 8px;
   justify-content: space-between;
-  position: absolute;
-  bottom: 0;
-  left: 0;
+  /* position: absolute; bottom: 0; left: 0; // Removido */
   width: 100%;
-  background-color: transparent;
+  background-color: transparent; /* Mantido, mas pode ser var(--input-background) se o TextArea for transparente */
   border-top: 1px solid rgba(0, 0, 0, 0.05); /* Separador sutil */
+  flex-shrink: 0; /* Para não ser comprimido pelo TextArea */
 `;
 
 const LeftButtons = styled.div`
@@ -80,8 +118,8 @@ const LeftButtons = styled.div`
 `;
 
 const BasicButton = styled(StyledButtonBase).attrs((props: StyledButtonBaseProps) => ({
-  variant: 'icon',
-  size: 'small'
+  $variant: 'icon',
+  $size: 'small'
 }))`
   width: 36px;
   height: 36px;
@@ -110,30 +148,36 @@ const ActionButton = styled(BasicButton)``;
 const FileButton = styled(BasicButton)`
   color: var(--primary-text);
   opacity: 0.8;
+  transition: opacity 0.2s ease;
 
   &:hover:not(:disabled) {
     color: var(--primary-text);
-    background-color: var(--hover-bg);
+    background-color: transparent;
+    opacity: 1;
   }
 
   &:active:not(:disabled) {
-    background-color: var(--hover-bg);
+    background-color: transparent;
     color: var(--primary-text);
+    opacity: 1;
   }
 `;
 
 const SendButton = styled(BasicButton)`
   color: var(--primary-text);
   opacity: 0.8;
+  transition: opacity 0.2s ease;
 
   &:hover:not(:disabled) {
     color: var(--primary-text);
-    background-color: var(--hover-bg);
+    background-color: transparent;
+    opacity: 1;
   }
 
   &:active:not(:disabled) {
-    background-color: var(--hover-bg);
+    background-color: transparent;
     color: var(--primary-text);
+    opacity: 1;
   }
   
   &:disabled {
@@ -212,22 +256,28 @@ const WebSearchToggle = styled.button<{ active: boolean }>`
 `;
 
 const GroundingButton = styled(BasicButton)<{ $active: boolean }>`
-  color: var(--primary-text);
   opacity: 0.8;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  color: var(--primary-text); // Cor padrão
+  background-color: transparent; // Fundo padrão
 
   &:hover:not(:disabled) {
-    color: var(--primary-text);
-    background-color: var(--hover-bg);
+    opacity: 1;
+    background-color: transparent; // Efeito de hover padrão
+    color: var(--primary-text); // Manter cor padrão no hover
   }
 
-  &:active:not(:disabled) {
-    background-color: var(--hover-bg);
-    color: var(--primary-text);
-  }
-
+  // Estilos quando o botão está ativo
   ${props => props.$active && css`
     background-color: var(--accent-color-light);
     color: var(--accent-color);
+    /* A opacidade base de 0.8 é herdada. Se quiser que o ativo seja sempre 1, defina aqui. */
+
+    &:hover:not(:disabled) {
+      opacity: 1; // Opacidade total no hover do ativo
+      background-color: var(--accent-color-light); // Manter fundo ativo
+      color: var(--accent-color); // Manter cor ativa
+    }
   `}
 
   svg {
@@ -297,19 +347,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      adjustTextareaHeight();
-    }
-  }, [message]);
-
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
+      textarea.style.height = 'auto'; // Permite encolher para recalcular scrollHeight
+      let newHeight = textarea.scrollHeight;
+
+      // Aplica os limites mínimo e máximo calculados
+      newHeight = Math.max(MIN_TEXTAREA_CALCULATED_PX, Math.min(newHeight, MAX_TEXTAREA_CALCULATED_PX));
+      
+      textarea.style.height = `${newHeight}px`;
     }
   };
+
+  useEffect(() => {
+    // Define a altura inicial ao montar.
+    const textarea = textareaRef.current;
+    if (textarea) {
+        textarea.style.height = `${MIN_TEXTAREA_CALCULATED_PX}px`;
+    }
+  }, []); // Apenas na montagem
+
+  useEffect(() => {
+    // Ajusta a altura sempre que a mensagem mudar.
+    adjustTextareaHeight();
+  }, [message]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -433,7 +495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             placeholder="Como posso ajudá-lo hoje?"
             disabled={isWaiting || isUploading}
             ref={textareaRef}
-            height={Math.min(textareaRef.current?.scrollHeight || 44, 150)}
+            // A altura é agora totalmente controlada pelo JS e CSS min/max-height
           />
           
           <ButtonsContainer>

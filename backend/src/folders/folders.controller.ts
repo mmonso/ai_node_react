@@ -1,66 +1,69 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+  ValidationPipe, // Adicionar ValidationPipe
+  HttpCode, // Adicionar HttpCode para o status 204 no delete
+  UsePipes, // Adicionar UsePipes
+} from '@nestjs/common';
 import { FoldersService } from './folders.service';
-import { Folder } from '../entities/folder.entity';
-import { Conversation } from '../entities/conversation.entity';
+import { CreateFolderDto } from './dto/create-folder.dto';
+import { UpdateFolderDto } from './dto/update-folder.dto';
+// import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Supondo que você tenha um JwtAuthGuard
 
-// DTOs for request body validation (optional but good practice)
-class CreateFolderDto {
-  name: string;
-}
-
-class UpdateFolderDto {
-  name: string;
-}
-
-class AddConversationToFolderDto {
-  conversationId: number;
-}
-
+// @UseGuards(JwtAuthGuard) // Descomente quando o JwtAuthGuard estiver configurado
 @Controller('folders')
+@UseGuards() // Placeholder para o JwtAuthGuard. Remova ou substitua pelo seu AuthGuard.
 export class FoldersController {
   constructor(private readonly foldersService: FoldersService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  create(@Body() createFolderDto: CreateFolderDto): Promise<Folder> {
-    return this.foldersService.createFolder(createFolderDto.name);
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  create(@Body() createFolderDto: CreateFolderDto, @Req() req) {
+    // const userId = req.user.userId; // Substitua pela forma correta de obter o userId
+    const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
+    return this.foldersService.create(createFolderDto, userId);
   }
 
   @Get()
-  findAll(): Promise<Folder[]> {
-    return this.foldersService.findAllFolders();
+  findAll(@Req() req) {
+    // const userId = req.user.userId;
+    const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
+    return this.foldersService.findAll(userId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<Folder> {
-    return this.foldersService.findFolderById(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    // const userId = req.user.userId;
+    const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
+    return this.foldersService.findOne(id, userId);
   }
 
-  @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() updateFolderDto: UpdateFolderDto): Promise<Folder> {
-    return this.foldersService.updateFolder(id, updateFolderDto.name);
+  @Patch(':id')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateFolderDto: UpdateFolderDto,
+    @Req() req,
+  ) {
+    // const userId = req.user.userId;
+    const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
+    return this.foldersService.update(id, updateFolderDto, userId);
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.foldersService.deleteFolder(id);
-  }
-
-  @Post(':folderId/conversations')
-  @HttpCode(HttpStatus.OK) // Or CREATED if you prefer for adding a sub-resource link
-  addConversationToFolder(
-    @Param('folderId', ParseIntPipe) folderId: number,
-    @Body() addConversationDto: AddConversationToFolderDto,
-  ): Promise<Conversation> {
-    return this.foldersService.addConversationToFolder(folderId, addConversationDto.conversationId);
-  }
-
-  @Delete('conversations/:conversationId')
-  @HttpCode(HttpStatus.OK)
-  removeConversationFromFolder(
-    @Param('conversationId', ParseIntPipe) conversationId: number,
-  ): Promise<Conversation> {
-    return this.foldersService.removeConversationFromFolder(conversationId);
+  @HttpCode(204) // Retorna 204 No Content em caso de sucesso
+  async remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    // const userId = req.user.userId;
+    const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
+    await this.foldersService.remove(id, userId);
+    // Não é necessário retornar nada explicitamente com HttpCode(204)
   }
 }

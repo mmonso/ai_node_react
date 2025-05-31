@@ -1,6 +1,10 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus, ParseBoolPipe, DefaultValuePipe, Patch } from '@nestjs/common'; // Added Patch
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConversationsService } from './conversations.service';
+import { MessageService } from './message.service'; // Adicionado MessageService
+import { AIResponseService } from './ai-response.service'; // Adicionado AIResponseService
+import { ConversationFolderService } from './conversation-folder.service'; // Adicionado ConversationFolderService
+import { ConversationModelService } from './conversation-model.service'; // Adicionado ConversationModelService
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { ConfigService } from '../config/config.service';
@@ -20,6 +24,10 @@ export class ConversationsController {
     private aiServiceFactory: AIServiceFactory,
     private aiProviderService: AIProviderService,
     private activeModelService: ActiveModelService,
+    private messageService: MessageService, // Adicionado MessageService
+    private aiResponseService: AIResponseService, // Adicionado AIResponseService
+    private conversationFolderService: ConversationFolderService, // Adicionado ConversationFolderService
+    private conversationModelService: ConversationModelService, // Adicionado ConversationModelService
   ) {}
 
   @Get()
@@ -33,16 +41,16 @@ export class ConversationsController {
   }
 
   @Post()
-  create(@Body() body: { title: string; modelId?: string }): Promise<Conversation> {
-    return this.conversationsService.create(body.title, body.modelId);
+  create(@Body() body: { title: string; modelId?: string; systemPrompt?: string; isPersona?: boolean }): Promise<Conversation> {
+    return this.conversationsService.create(body.title, body.modelId, body.systemPrompt, body.isPersona);
   }
 
   @Put(':id')
   update(
     @Param('id') id: number,
-    @Body() body: { title: string },
+    @Body() body: { title: string; isPersona?: boolean; systemPrompt?: string | null },
   ): Promise<Conversation> {
-    return this.conversationsService.update(id, body.title);
+    return this.conversationsService.update(id, body.title, body.isPersona, body.systemPrompt);
   }
 
   @Delete(':id')
@@ -59,7 +67,7 @@ export class ConversationsController {
     @Param('folderId', ParseIntPipe) folderId: number,
   ): Promise<Conversation> {
     this.logger.log(`Adicionando conversa ${conversationId} à pasta ${folderId}`);
-    return this.conversationsService.addConversationToFolder(conversationId, folderId);
+    return this.conversationFolderService.addConversationToFolder(conversationId, folderId);
   }
 
   @Delete(':conversationId/folder')
@@ -68,7 +76,7 @@ export class ConversationsController {
     @Param('conversationId', ParseIntPipe) conversationId: number,
   ): Promise<Conversation> {
     this.logger.log(`Removendo conversa ${conversationId} da pasta`);
-    return this.conversationsService.removeConversationFromFolder(conversationId);
+    return this.conversationFolderService.removeConversationFromFolder(conversationId);
   }
 
   // --- Rotas para Modelo ---
@@ -80,7 +88,7 @@ export class ConversationsController {
     @Body() body: { modelId: string; modelConfig?: any },
   ): Promise<Conversation> {
     this.logger.log(`Atualizando modelo da conversa ${conversationId} para ${body.modelId}`);
-    return this.conversationsService.updateConversationModel(
+    return this.conversationModelService.updateConversationModel(
       conversationId,
       body.modelId,
       body.modelConfig,
@@ -88,6 +96,39 @@ export class ConversationsController {
   }
 
   // --- Rota de Mensagens ---
+
+  private _processUploadedFile(file?: Express.Multer.File): { imageUrl?: string; fileUrl?: string } {
+    let imageUrl: string | undefined;
+    let fileUrl: string | undefined;
+
+    if (file) {
+      this.logger.log(`Arquivo recebido: ${JSON.stringify({
+        originalname: file.originalname,
+        filename: file.filename,
+        mimetype: file.mimetype,
+        size: file.size,
+      })}`);
+
+      const filename = file.filename || file.originalname;
+
+      if (filename) {
+        const ext = path.extname(filename).toLowerCase();
+        const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const isImage = imageExts.includes(ext) || file.mimetype.startsWith('image/');
+
+        if (isImage) {
+          imageUrl = `/uploads/${filename}`;
+          this.logger.log(`Imagem detectada, URL: ${imageUrl}`);
+        } else {
+          fileUrl = `/uploads/${filename}`;
+          this.logger.log(`Arquivo detectado, URL: ${fileUrl}`);
+        }
+      } else {
+        this.logger.error('Arquivo enviado sem nome de arquivo válido');
+      }
+    }
+    return { imageUrl, fileUrl };
+  }
  
   @Post(':id/messages')
   @UseInterceptors(FileInterceptor('file'))
@@ -97,8 +138,6 @@ export class ConversationsController {
     @Query('web_search', new DefaultValuePipe(false), ParseBoolPipe) useWebSearch: boolean,
     @UploadedFile() file?: Express.Multer.File,
   ): Promise<Message[]> {
-    let imageUrl;
-    let fileUrl;
     let modelConfig = null;
     
     // Log da solicitação com o parâmetro de busca na web
@@ -114,36 +153,17 @@ export class ConversationsController {
       }
     }
     
-    if (file) {
-      this.logger.log(`Arquivo recebido: ${JSON.stringify({
-        originalname: file.originalname,
-        filename: file.filename,
-        mimetype: file.mimetype,
-        size: file.size
-      })}`);
-      
-      // Verificar se temos um nome de arquivo válido
-      const filename = file.filename || file.originalname;
-      
-      if (filename) {
-        // Verificar se é uma imagem baseado na extensão ou mimetype
-        const ext = path.extname(filename).toLowerCase();
-        const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-        const isImage = imageExts.includes(ext) || file.mimetype.startsWith('image/');
-        
-        if (isImage) {
-          // Garantir que a URL completa do servidor seja usada
-          imageUrl = `/uploads/${filename}`;
-          this.logger.log(`Imagem detectada, URL: ${imageUrl}`);
-        } else {
-          fileUrl = `/uploads/${filename}`;
-          this.logger.log(`Arquivo detectado, URL: ${fileUrl}`);
-        }
-      } else {
-        this.logger.error('Arquivo enviado sem nome de arquivo válido');
-      }
-    }
+    const { imageUrl, fileUrl } = this._processUploadedFile(file);
     
+    // Busca a conversa atualizada para obter as relações (folder, isPersona, systemPrompt)
+    // A busca da conversa é feita aqui para garantir que as relações estejam carregadas
+    // antes de determinar o prompt de sistema.
+    const conversation = await this.conversationsService.findOneWithFolder(id);
+    
+    if (!conversation) {
+      throw new Error(`Conversa com ID ${id} não encontrada.`);
+    }
+
     // Adicionar a mensagem do usuário
     const userMessage = await this.conversationsService.addUserMessage(
       id,
@@ -160,38 +180,13 @@ export class ConversationsController {
       fileUrl: userMessage.fileUrl
     })}`);
 
-    // Busca a conversa atualizada
-    const conversation = await this.conversationsService.findOne(id);
+    // Recarregar a conversa para garantir que a lista de mensagens esteja atualizada
+    // e que a relação 'folder' esteja carregada.
+    const conversationAfterUserMessage = await this.conversationsService.findOneWithFolder(id);
     
-    if (!conversation) {
-      throw new Error(`Conversa com ID ${id} não encontrada.`);
-    }
-
-    // Busca o prompt do sistema
-    const systemPrompt = await this.configService.getSystemPrompt();
-    
-    // Verifica se é a primeira mensagem da conversa para gerar título
-    if (conversation.title === 'Nova Conversa' && conversation.messages.length === 1) {
-      this.logger.log(`Conversa "${conversation.title}" (${id}) detectada. Tentando gerar novo título...`);
-      
-      // Obter o serviço apropriado para o modelo ativo global
-      const aiService = await this.aiProviderService.getService();
-      
-      // Gerar e atualizar título em background
-      aiService.generateConversationTitle(body.content)
-        .then(newTitle => {
-          if (newTitle && newTitle !== 'Nova Conversa') {
-            this.logger.log(`Novo título gerado para conversa ${id}: "${newTitle}". Atualizando...`);
-            return this.conversationsService.update(id, newTitle);
-          }
-        })
-        .then(() => {
-          this.logger.log(`Título da conversa ${id} atualizado com sucesso.`);
-        })
-        .catch(err => {
-          this.logger.error(`Falha ao gerar/atualizar título para conversa ${id}:`, err);
-        });
-    }
+    // Gera o título da conversa, se necessário (movido para o ConversationsService)
+    // A chamada explícita foi removida daqui, pois o ConversationsService agora lida com isso internamente
+    // ao adicionar a mensagem do usuário.
     
     // Obter o modelo ativo global e sua configuração
     const { model: activeModel, config: activeModelConfig } = await this.activeModelService.getActiveModel();
@@ -199,23 +194,14 @@ export class ConversationsController {
     // Se existe uma configuração personalizada do modelo para esta requisição, usá-la
     const finalModelConfig = modelConfig || activeModelConfig;
     
-    // Gera a resposta do modelo apropriado
-    this.logger.log(`Gerando resposta para conversa ${id} usando modelo global ${activeModel?.name}${useWebSearch ? ' com busca na web' : ''}...`);
-    
-    // Obter o serviço apropriado para o modelo ativo global
-    const aiService = await this.aiProviderService.getService(activeModel);
-    
-    // Gerar resposta
-    const botResponse = await aiService.generateResponse(
-      conversation.messages, 
-      systemPrompt,
+    // Gera e salva a resposta do bot usando o AIResponseService
+    this.logger.log(`Solicitando AIResponseService para gerar resposta para conversa ${id} usando modelo ${activeModel?.name}${useWebSearch ? ' com busca na web' : ''}...`);
+    await this.aiResponseService.generateAndSaveBotResponse(
+      conversationAfterUserMessage, // Passa a entidade Conversation completa
+      conversationAfterUserMessage.messages,
       useWebSearch,
-      activeModel,
-      finalModelConfig
+      finalModelConfig, // Passa a configuração final do modelo
     );
-    
-    // Salva a resposta do bot
-    await this.conversationsService.addBotMessage(id, botResponse);
     
     // Retorna todas as mensagens atualizadas
     const updatedConversation = await this.conversationsService.findOne(id);
@@ -227,6 +213,6 @@ export class ConversationsController {
     @Param('messageId') messageId: string,
     @Body() updateMessageDto: UpdateMessageDto,
   ): Promise<Message> {
-    return this.conversationsService.updateMessageContent(messageId, updateMessageDto);
+    return this.messageService.updateMessageContent(messageId, updateMessageDto);
   }
 }

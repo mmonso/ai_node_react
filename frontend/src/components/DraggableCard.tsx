@@ -248,7 +248,7 @@ const CardContainer = styled.div<{ $isDragging: boolean; $isResizing: boolean }>
   position: absolute;
   background-color: var(--secondary-bg);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--card-shadow);
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -261,7 +261,7 @@ const CardContainer = styled.div<{ $isDragging: boolean; $isResizing: boolean }>
   max-height: calc(100vh - 40px);
   user-select: none;
   &:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.32);
+    box-shadow: var(--card-hover-shadow);
   }
 `;
 

@@ -3,11 +3,11 @@ import { createGlobalStyle } from 'styled-components';
 const GlobalStyles = createGlobalStyle`
   :root {
     /* Tema Escuro Padrão */
-    --primary-bg-dark: #121212;
-    --secondary-bg-dark: #1e1e1e;
+    --primary-bg-dark:rgb(32, 32, 32);
+    --secondary-bg-dark:rgb(41, 41, 41);
     --tertiary-bg-dark: #252525;
     --border-color-dark: #333;
-    --primary-text-dark: #ffffff;
+    --primary-text-dark:rgb(240, 240, 240);
     --secondary-text-dark: #aaaaaa;
     --accent-color-dark: #5d6b85;
     --accent-hover-dark: #4e5d77;
@@ -22,7 +22,15 @@ const GlobalStyles = createGlobalStyle`
     --message-user-bg-dark:  #2b2b2b; /* Fundo mais claro para mensagens do usuário no tema escuro */
     --message-user-text-dark: #ffffff; /* Cor do texto na mensagem do usuário no tema escuro */
     --hover-bg-dark: #2b2b2b;
-
+    --sidebar-shadow-dark: none;
+    --model-sidebar-shadow-dark: none;
+    --tab-shadow-dark: none;
+    --modal-shadow-dark: none;
+    --menu-shadow-dark: none;
+    --card-shadow-dark: none;
+    --card-hover-shadow-dark: none;
+    --input-shadow-dark: none;
+ 
     /* Tema Claro */
     --primary-bg-light: #ffffff;
     --secondary-bg-light: #f0f2f5; /* Um cinza claro para fundos secundários */
@@ -43,7 +51,15 @@ const GlobalStyles = createGlobalStyle`
     --message-user-bg-light: rgba(0, 0, 0, 0.1); /* Fundo mais claro para mensagens do usuário no tema claro */
     --message-user-text-light: #111827; /* Cor do texto na mensagem do usuário no tema claro */
     --hover-bg-light: rgba(0, 0, 0, 0.1); /* Aumentado de 0.05 para 0.1 */
-
+    --sidebar-shadow-light: 0 0 10px rgba(0, 0, 0, 0.2);
+    --model-sidebar-shadow-light: -2px 0 10px rgba(0, 0, 0, 0.2);
+    --tab-shadow-light: -2px 0 5px rgba(0, 0, 0, 0.2);
+    --modal-shadow-light: 0 5px 15px rgba(0, 0, 0, 0.3);
+    --menu-shadow-light: 0 4px 16px rgba(0,0,0,0.3);
+    --card-shadow-light: 0 8px 32px rgba(0, 0, 0, 0.25);
+    --card-hover-shadow-light: 0 12px 40px rgba(0, 0, 0, 0.32);
+    --input-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.1);
+ 
     /* Variáveis dinâmicas que mudarão com o tema */
     --primary-bg: var(--primary-bg-dark);
     --secondary-bg: var(--secondary-bg-dark);
@@ -62,6 +78,14 @@ const GlobalStyles = createGlobalStyle`
     --scrollbar-thumb: var(--scrollbar-thumb-dark);
     --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-dark);
     --hover-bg: var(--hover-bg-dark);
+    --sidebar-shadow: var(--sidebar-shadow-dark);
+    --model-sidebar-shadow: var(--model-sidebar-shadow-dark);
+    --tab-shadow: var(--tab-shadow-dark);
+    --modal-shadow: var(--modal-shadow-dark);
+    --menu-shadow: var(--menu-shadow-dark);
+    --card-shadow: var(--card-shadow-dark);
+    --card-hover-shadow: var(--card-hover-shadow-dark);
+    --input-shadow: var(--input-shadow-dark);
     
     /* Variáveis que não mudam com o tema (ou são específicas) */
     --message-user-bg: var(--message-user-bg-dark); /* Usando a nova variável */
@@ -86,7 +110,15 @@ const GlobalStyles = createGlobalStyle`
     --scrollbar-thumb: var(--scrollbar-thumb-light);
     --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-light);
     --hover-bg: var(--hover-bg-light);
-
+    --sidebar-shadow: var(--sidebar-shadow-light);
+    --model-sidebar-shadow: var(--model-sidebar-shadow-light);
+    --tab-shadow: var(--tab-shadow-light);
+    --modal-shadow: var(--modal-shadow-light);
+    --menu-shadow: var(--menu-shadow-light);
+    --card-shadow: var(--card-shadow-light);
+    --card-hover-shadow: var(--card-hover-shadow-light);
+    --input-shadow: var(--input-shadow-light);
+ 
     --message-user-bg: var(--message-user-bg-light); /* Usando a nova variável */
     --message-user-text: var(--message-user-text-light); /* Usando a nova variável */
   }
@@ -98,13 +130,12 @@ const GlobalStyles = createGlobalStyle`
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Merriweather', serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--primary-bg);
     color: var(--primary-text);
-    line-height: 1.5;
+    line-height: 1.8;
     font-size: 16px;
   }
 
@@ -126,9 +157,9 @@ const GlobalStyles = createGlobalStyle`
     }
   }
 
-  button, input, textarea {
+  button, input, textarea, select, option {
     font-family: inherit;
-    font-size: 16px;
+    font-size: 16px; /* Note: font-size para select/option pode precisar de ajuste específico se 16px for muito grande */
   }
 
   button {
@@ -192,7 +223,7 @@ const GlobalStyles = createGlobalStyle`
   }
 
   code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+    font-family: 'JetBrains Mono', Menlo, 'DejaVu Sans Mono', monospace;
     background-color: var(--code-bg); /* Usar variável específica */
     padding: 0.2em 0.4em;
     border-radius: 3px;

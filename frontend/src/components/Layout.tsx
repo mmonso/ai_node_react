@@ -4,7 +4,6 @@ import StyledButtonBase from './common/StyledButtonBase'; // Importar o botão b
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
 import ModelSidebar from './ModelSidebar';
-import { useParams } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -38,7 +37,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </ContentContainer>
       
       {isSettingsOpen && (
-        <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+        <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       )}
     </LayoutContainer>
   );
@@ -84,18 +83,9 @@ const ContentWrapper = styled.div`
   overflow-y: auto;
 `;
 
-const ButtonsContainer = styled.div`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 100;
-  display: flex;
-  gap: 8px;
-`;
-
 const IconButton = styled(StyledButtonBase).attrs(props => ({
-  variant: 'icon',
-  size: 'medium'
+  $variant: 'icon',
+  $size: 'medium'
 }))`
   width: 48px;
   height: 48px;
@@ -118,20 +108,6 @@ const IconButton = styled(StyledButtonBase).attrs(props => ({
   svg {
     width: 1em !important; // SVG terá 1em de largura (50px devido ao font-size do IconButton)
     height: 1em !important; // SVG terá 1em de altura (50px devido ao font-size do IconButton)
-  }
-`;
-
-const SettingsButton = styled(IconButton)`
-  color: var(--primary-text);
-
-  &:hover:not(:disabled) {
-    background-color: var(--hover-bg);
-    color: var(--primary-text);
-  }
-
-  &:active:not(:disabled) {
-    background-color: var(--hover-bg);
-    color: var(--primary-text);
   }
 `;
 

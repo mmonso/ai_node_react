@@ -8,8 +8,11 @@
     "start": "node dist/main.js",
     "dev": "ts-node src/main.ts",
     "watch": "nodemon -e ts --exec \"ts-node src/main.ts\"",
-    "typeorm": "ts-node ./node_modules/typeorm/cli.js",
-    "typeorm:g": "npm run typeorm -- migration:generate -d ./typeorm.config.ts"
+    "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+    "typeorm:g": "npm run typeorm -- migration:generate -d ./typeorm.config.ts",
+    "typeorm:r": "npm run typeorm -- migration:run -d ./typeorm.config.ts",
+    "typeorm:rev": "npm run typeorm -- migration:revert -d ./typeorm.config.ts",
+    "typeorm:sync": "npm run typeorm -- schema:sync -d ./typeorm.config.ts"
   },
   "keywords": [
     "chatbot",

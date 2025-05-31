@@ -1,15 +1,22 @@
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { Message } from './message.entity';
-import { Folder } from './folder.entity';
 import { Model } from './model.entity';
+import { Folder } from './folder.entity';
 
-@Entity()
+@Entity('conversations') // Especificando o nome da tabela explicitamente
+@Index(['folderId']) // Adicionando índice para folderId
 export class Conversation {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
   title: string;
+
+  @Column({ type: 'text', nullable: true })
+  systemPrompt: string;
+
+  @Column({ type: 'boolean', default: false })
+  isPersona: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -20,12 +27,15 @@ export class Conversation {
   @OneToMany(() => Message, message => message.conversation, { cascade: true })
   messages: Message[];
 
-  @ManyToOne(() => Folder, folder => folder.conversations, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Folder, (folder) => folder.conversations, {
+    nullable: true,
+    onDelete: 'SET NULL', // Se a pasta for deletada, seta folderId para NULL
+  })
   @JoinColumn({ name: 'folderId' })
   folder: Folder;
 
   @Column({ type: 'int', nullable: true })
-  folderId: number;
+  folderId: number | null;
 
   @ManyToOne(() => Model, { nullable: true, eager: true })
   @JoinColumn({ name: 'modelId' })

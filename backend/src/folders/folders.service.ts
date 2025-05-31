@@ -3,78 +3,71 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Folder } from '../entities/folder.entity';
 import { Conversation } from '../entities/conversation.entity';
+import { CreateFolderDto } from './dto/create-folder.dto';
+import { UpdateFolderDto } from './dto/update-folder.dto';
 
 @Injectable()
 export class FoldersService {
   constructor(
     @InjectRepository(Folder)
-    private foldersRepository: Repository<Folder>,
+    private readonly folderRepository: Repository<Folder>,
     @InjectRepository(Conversation)
-    private conversationsRepository: Repository<Conversation>,
+    private readonly conversationRepository: Repository<Conversation>,
   ) {}
 
-  async createFolder(name: string): Promise<Folder> {
-    const folder = this.foldersRepository.create({ name });
-    return this.foldersRepository.save(folder);
+  async create(createFolderDto: CreateFolderDto, userId: string): Promise<Folder> {
+    const newFolder = this.folderRepository.create({
+      ...createFolderDto,
+      userId,
+    });
+    return this.folderRepository.save(newFolder);
   }
 
-  async findAllFolders(): Promise<Folder[]> {
-    return this.foldersRepository.find({ relations: ['conversations'] });
+  async findAll(userId: string): Promise<Folder[]> {
+    return this.folderRepository.find({
+      where: { userId },
+      order: { updatedAt: 'DESC' }, // Ordenar por mais recente
+    });
   }
 
-  async findFolderById(id: number): Promise<Folder> {
-    const folder = await this.foldersRepository.findOne({
-      where: { id },
-      relations: ['conversations'],
+  async findOne(id: number, userId: string): Promise<Folder> {
+    const folder = await this.folderRepository.findOne({
+      where: { id, userId },
+      // relations: ['conversations'], // Opcional: carregar conversas associadas
     });
     if (!folder) {
-      throw new NotFoundException(`Folder with ID ${id} not found`);
+      throw new NotFoundException(`Pasta com ID ${id} não encontrada ou não pertence ao usuário.`);
     }
     return folder;
   }
 
-  async updateFolder(id: number, name: string): Promise<Folder> {
-    const folder = await this.findFolderById(id); // Reuses validation
-    folder.name = name;
-    return this.foldersRepository.save(folder);
+  async update(id: number, updateFolderDto: UpdateFolderDto, userId: string): Promise<Folder> {
+    // Primeiro, verifica se a pasta existe e pertence ao usuário
+    const folderToUpdate = await this.findOne(id, userId);
+
+    // Mescla as alterações do DTO na entidade existente
+    // O TypeORM é inteligente o suficiente para atualizar apenas os campos fornecidos
+    Object.assign(folderToUpdate, updateFolderDto);
+    
+    return this.folderRepository.save(folderToUpdate);
   }
 
-  async deleteFolder(id: number): Promise<void> {
-    const folder = await this.findFolderById(id); // Reuses validation
+  async remove(id: number, userId: string): Promise<void> {
+    const folderToRemove = await this.findOne(id, userId); // Garante que a pasta existe e pertence ao usuário
 
-    // Move conversations to root before deleting folder
-    if (folder.conversations && folder.conversations.length > 0) {
-      for (const conversation of folder.conversations) {
-        conversation.folder = null;
-        conversation.folderId = null;
-        await this.conversationsRepository.save(conversation);
-      }
+    // Antes de remover a pasta, desassociar todas as conversas que pertencem a ela.
+    // Isso define folderId como null para essas conversas.
+    await this.conversationRepository.update(
+      { folderId: id }, // Critério: todas as conversas com este folderId
+      { folderId: null }, // Atualização: definir folderId como null
+    );
+
+    // Agora remove a pasta
+    const result = await this.folderRepository.delete({ id, userId });
+
+    if (result.affected === 0) {
+      // Isso não deveria acontecer se findOne não lançou erro, mas é uma checagem extra.
+      throw new NotFoundException(`Pasta com ID ${id} não encontrada para remoção.`);
     }
-    await this.foldersRepository.delete(id);
-  }
-
-  async addConversationToFolder(folderId: number, conversationId: number): Promise<Conversation> {
-    const folder = await this.findFolderById(folderId);
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-
-    if (!conversation) {
-      throw new NotFoundException(`Conversation with ID ${conversationId} not found`);
-    }
-
-    conversation.folder = folder;
-    // conversation.folderId = folder.id; // TypeORM handles this automatically with the relation
-    return this.conversationsRepository.save(conversation);
-  }
-
-  async removeConversationFromFolder(conversationId: number): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
-
-    if (!conversation) {
-      throw new NotFoundException(`Conversation with ID ${conversationId} not found`);
-    }
-
-    conversation.folder = null;
-    // conversation.folderId = null; // TypeORM handles this automatically
-    return this.conversationsRepository.save(conversation);
   }
 }

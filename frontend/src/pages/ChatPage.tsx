@@ -15,7 +15,7 @@ const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 750px;
+  max-width: 800px;
   margin: 0 auto;
   width: 100%;
 `;
@@ -27,7 +27,8 @@ const MessagesContainer = styled.div`
 `;
 
 const InputWrapper = styled.div`
-  margin-top: auto;
+  margin-top: auto; /* Empurra para baixo se houver espaço extra no container flex pai */
+  flex-shrink: 0; /* Garante que este wrapper não encolha se o conteúdo for grande */
 `;
 
 const LoadingIndicator = styled.div`
@@ -242,8 +243,8 @@ const ChatPage: React.FC = () => {
           title: conversation?.title || 'Nova Conversa',
           createdAt: conversation?.createdAt || new Date().toISOString(),
           updatedAt: conversation?.updatedAt || new Date().toISOString(),
-          messages: [userMessage],
-          folderId: conversation?.folderId
+          messages: [userMessage]
+          // folderId: conversation?.folderId // Removido
         };
       }
       
@@ -282,8 +283,8 @@ const ChatPage: React.FC = () => {
                 title: conversation?.title || 'Nova Conversa',
                 createdAt: conversation?.createdAt || new Date().toISOString(),
                 updatedAt: conversation?.updatedAt || new Date().toISOString(),
-                messages: [botResponse],
-                folderId: conversation?.folderId
+                messages: [botResponse]
+                // folderId: conversation?.folderId // Removido
               };
             }
             
