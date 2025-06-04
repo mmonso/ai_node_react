@@ -1,10 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Model } from '../entities/model.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AIServiceInterface } from '../models/ai-service.interface';
 import { ProviderApiService, ProviderModelInfo } from '../models/provider-api.service.interface';
+import { ToolsService, obterDataHoraAtualToolDefinition, criarEventoCalendarioToolDefinition, listarEventosCalendarioToolDefinition } from '../tools/tools.service';
+import { CalendarService } from '../calendar/calendar.service';
+import { CreateEventDto } from '../calendar/dto/create-event.dto';
+import { AgentsService } from '../agents/agents.service'; // Importar AgentsService
 
 @Injectable()
 export class OpenAIService implements AIServiceInterface, ProviderApiService {
@@ -12,7 +16,11 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
   private readonly logger = new Logger(OpenAIService.name);
 
   constructor(
-    private configService: ConfigService
+    private configService: ConfigService,
+    private toolsService: ToolsService,
+    private calendarService: CalendarService,
+    @Inject(forwardRef(() => AgentsService))
+    private agentsService: AgentsService, // Injetar AgentsService com forwardRef
   ) {
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!this.apiKey) {
@@ -23,33 +31,30 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
   }
 
   async generateResponse(
-    messages: any[], 
+    messages: any[],
     systemPrompt: string,
     useWebSearch: boolean = false,
     model?: Model,
-    modelConfig?: any
+    modelConfig?: any,
+    currentConversationId?: string, // ID da conversa atual que originou a chamada
   ): Promise<string> {
     try {
-      this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema usando OpenAI.`);
-      
-      // Garantir que temos uma chave API
       if (!this.apiKey) {
         throw new Error('Chave API OpenAI não configurada');
       }
 
-      // Determinar qual modelo usar
-      let modelName = 'gpt-4.1'; // Modelo padrão
+      const mainAgent = await this.agentsService.getMainAgent();
+      const mainAgentConversationId = mainAgent?.conversationId;
+
+      let modelName = 'gpt-4.1';
       let config = {
         temperature: 0.7,
         maxOutputTokens: 2048
       };
       
       if (model) {
-        // Se um modelo específico foi fornecido, usar ele
         this.logger.log(`Usando modelo específico: ${model.name} (${model.provider})`);
         modelName = model.name;
-        
-        // Usar a configuração do modelo, se fornecida
         if (modelConfig) {
           config = modelConfig;
           this.logger.log(`Usando configuração personalizada do modelo: ${JSON.stringify(config)}`);
@@ -59,85 +64,61 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
         }
       }
 
-      // Obter data e hora atual formatadas
-      const now = new Date();
-      const formattedDate = now.toLocaleString('pt-BR', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit'
-      });
-
       // Preparar o corpo da requisição
-      const requestBody: any = {
+      const initialRequestBody: any = {
         model: modelName,
-        messages: [
-          {
-            role: "system",
-            content: `${systemPrompt}\nAgora é ${formattedDate}.`
-          }
-        ]
+        messages: [], // Será preenchido abaixo
+        tools: [obterDataHoraAtualToolDefinition, criarEventoCalendarioToolDefinition, listarEventosCalendarioToolDefinition],
+        tool_choice: "auto",
       };
+
+      this.logger.debug(`Gerando resposta para Conversa com ${messages.length} mensagens e prompt do sistema.`);
+      initialRequestBody.messages.push({
+        role: "system",
+        content: systemPrompt,
+      });
 
       // Adicionar as mensagens anteriores no formato correto
       for (const msg of messages) {
         const messageObj: any = {
           role: msg.isUser ? "user" : "assistant",
-          content: []
+          content: [] // Inicializa como array para suportar conteúdo multimodal
         };
         
-        // Adicionar conteúdo de texto
+        let textContent = '';
         if (msg.content) {
           if (typeof msg.content === 'string') {
-            if (msg.imageUrl && msg.isUser) {
-              // Se tiver imagem, será adicionada como array
-              messageObj.content = [{ type: "text", text: msg.content }];
-            } else {
-              // Se for só texto, pode ser string direta
-              messageObj.content = msg.content;
-            }
+            textContent = msg.content;
           }
         }
+
+        if (textContent) {
+           messageObj.content.push({ type: "text", text: textContent });
+        }
         
-        // Se tiver imagem e for uma mensagem do usuário, adicionar a imagem
         if (msg.imageUrl && msg.isUser) {
           try {
-            // A URL é /uploads/nome-do-arquivo, precisamos pegar apenas o nome do arquivo
-            const imageName = msg.imageUrl.startsWith('/uploads/') 
-              ? msg.imageUrl.substring('/uploads/'.length) 
+            const imageName = msg.imageUrl.startsWith('/uploads/')
+              ? msg.imageUrl.substring('/uploads/'.length)
               : path.basename(msg.imageUrl);
-              
             this.logger.debug(`Nome do arquivo extraído: ${imageName}`);
-            
             const uploadDir = path.join(__dirname, '..', '..', 'uploads');
             const imagePath = path.join(uploadDir, imageName);
-            
             this.logger.debug(`Caminho completo da imagem: ${imagePath}`);
-            
             if (fs.existsSync(imagePath)) {
               this.logger.debug(`Imagem encontrada no caminho: ${imagePath}`);
-              
-              // Ler a imagem como base64
               const imageBuffer = fs.readFileSync(imagePath);
               const base64Image = imageBuffer.toString('base64');
-              
-              // Determinar o mimeType com base na extensão
               const ext = path.extname(imagePath).toLowerCase();
-              let mimeType = 'image/jpeg'; // padrão
-              
+              let mimeType = 'image/jpeg';
               if (ext === '.png') mimeType = 'image/png';
               else if (ext === '.gif') mimeType = 'image/gif';
               else if (ext === '.webp') mimeType = 'image/webp';
-              
               this.logger.debug(`Tipo MIME detectado: ${mimeType}, tamanho base64: ${base64Image.length}`);
-              
-              // Adicionar imagem como parte da mensagem
               messageObj.content.push({
                 type: "image_url",
-                image_url: `data:${mimeType};base64,${base64Image}`
+                image_url: { url: `data:${mimeType};base64,${base64Image}` }
               });
-              
               this.logger.debug(`Imagem adicionada com sucesso à requisição`);
             } else {
               this.logger.warn(`Imagem não encontrada no caminho: ${imagePath}`);
@@ -146,75 +127,223 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
             this.logger.error('Erro ao processar imagem:', error);
           }
         }
-        
-        // Adicionar à lista de mensagens
-        requestBody.messages.push(messageObj);
+        // Se content for apenas uma string vazia e não houver imagem,
+        // a API pode rejeitar. Garantir que 'content' não seja uma array vazia.
+        if (messageObj.content.length === 0 && !textContent) {
+            // Se não há texto nem imagem, e o papel é 'user', a API pode não gostar.
+            // Se for 'assistant', pode ser uma chamada de ferramenta sem texto.
+            // Por segurança, se for user e content estiver vazio, enviamos um placeholder ou logamos.
+            // No entanto, o loop `for (const msg of messages)` já filtra mensagens sem `msg.content` (string)
+            // ou sem `msg.imageUrl`.
+            // Se messageObj.content ainda estiver vazio aqui, significa que msg.content não era uma string
+            // e não havia imageUrl. Isso deve ser tratado.
+            // A lógica atual já faz com que, se msg.content não for string, ele não é adicionado.
+            // Se for string vazia, é adicionado como {type: "text", text: ""}.
+            // Se for uma array vazia e não houver imagem, a API pode reclamar.
+            // A OpenAI espera que 'content' seja uma string ou uma array de partes.
+            // Se for uma array vazia, é problemático.
+            // A lógica atual garante que, se houver textContent, ele é adicionado.
+            // Se houver imageUrl, ele é adicionado.
+            // Se ambos estiverem vazios, messageObj.content será [].
+            // Vamos garantir que, se for uma array vazia, enviamos uma string vazia como conteúdo.
+            if(messageObj.content.length === 0) {
+                messageObj.content = ""; // Fallback para string vazia se array de partes estiver vazia
+            }
+        }
+        initialRequestBody.messages.push(messageObj);
       }
 
       // Adicionar configurações do modelo
       if (config.temperature) {
-        requestBody.temperature = config.temperature;
+        initialRequestBody.temperature = config.temperature;
       }
-      
       if (config.maxOutputTokens) {
-        requestBody.max_tokens = config.maxOutputTokens;
+        initialRequestBody.max_tokens = config.maxOutputTokens;
       }
 
+      // Manter uma cópia das mensagens para a segunda chamada, se necessário
+      const messagesForSecondCall = JSON.parse(JSON.stringify(initialRequestBody.messages));
+
       try {
-        // Fazer a requisição para a API
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        this.logger.debug('Enviando primeira requisição para OpenAI:', JSON.stringify(initialRequestBody));
+        let response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(initialRequestBody),
         });
 
-        // Log do status da resposta
-        this.logger.log(`Status da resposta: ${response.status} ${response.statusText}`);
-
-        // Verificar status da resposta
+        this.logger.log(`Status da primeira resposta: ${response.status} ${response.statusText}`);
         if (!response.ok) {
           const errorText = await response.text();
-          this.logger.error(`API OpenAI retornou status ${response.status}: ${errorText}`);
+          this.logger.error(`API OpenAI (1ª chamada) retornou status ${response.status}: ${errorText}`);
           return `Erro na API OpenAI (${response.status}): ${errorText}`;
         }
 
-        // Ler o corpo da resposta
-        const responseData = await response.json();
+        let responseData = await response.json();
+        this.logger.debug('Resposta da primeira chamada OpenAI:', JSON.stringify(responseData));
+
+        const choice = responseData.choices && responseData.choices[0];
+        const messageFromAI = choice && choice.message;
+
+        if (messageFromAI && messageFromAI.tool_calls) {
+          this.logger.log('IA solicitou chamada de ferramenta(s).');
+          // Adicionar a resposta da IA (com tool_calls) ao histórico para a segunda chamada
+          messagesForSecondCall.push(messageFromAI);
+
+          for (const toolCall of messageFromAI.tool_calls) {
+            let functionResult = '';
+            let functionName = toolCall.function ? toolCall.function.name : 'Nome da função não encontrado';
+
+            try {
+              if (functionName === "obterDataHoraAtual") {
+                this.logger.log(`Executando ferramenta: ${functionName}`);
+                functionResult = this.toolsService.obterDataHoraAtual();
+                this.logger.log(`Resultado da ferramenta ${functionName}: ${functionResult}`);
+              } else if (functionName === "criar_evento_calendario") {
+                this.logger.log(`Executando ferramenta: ${functionName} para conversationId: ${currentConversationId}`);
+                const args = JSON.parse(toolCall.function.arguments);
+
+                if (!args.title || !args.startTime || !args.endTime) {
+                  let missingArgs = [];
+                  if (!args.title) missingArgs.push("title");
+                  if (!args.startTime) missingArgs.push("startTime");
+                  if (!args.endTime) missingArgs.push("endTime");
+                  throw new Error(`Argumentos inválidos para criar_evento_calendario: ${missingArgs.join(', ')} são obrigatórios.`);
+                }
+
+                if (isNaN(new Date(args.startTime).getTime()) || isNaN(new Date(args.endTime).getTime())) {
+                  throw new Error("Argumentos inválidos para criar_evento_calendario: startTime e endTime devem ser datas válidas.");
+                }
+
+                const createEventDto: CreateEventDto = {
+                  title: args.title,
+                  startTime: new Date(args.startTime),
+                  endTime: new Date(args.endTime),
+                  description: args.description,
+                  // conversationId não vem mais da IA para esta ferramenta.
+                  // Será definido abaixo se for uma chamada do MainAgent.
+                };
+
+                if (currentConversationId && mainAgentConversationId && currentConversationId === mainAgentConversationId) {
+                  this.logger.log(`Chamada de criar_evento_calendario originada pelo MainAgent. Usando conversationId: ${mainAgentConversationId}`);
+                  createEventDto.conversationId = mainAgentConversationId;
+                } else {
+                  // Se não for o MainAgent, e a ferramenta agora não aceita conversationId da IA,
+                  // o evento será criado sem conversationId, a menos que uma lógica diferente seja necessária.
+                  // Para este cenário, o evento do MainAgent *sempre* terá seu conversationId.
+                  // Outras chamadas (se houver) não associarão um conversationId através desta lógica.
+                  this.logger.log(`Chamada de criar_evento_calendario não originada pelo MainAgent ou MainAgent não configurado. Evento será criado sem conversationId via esta lógica.`);
+                }
+                
+                const event = await this.calendarService.createEvent(createEventDto);
+                functionResult = JSON.stringify({ success: true, event });
+                this.logger.log(`Resultado da ferramenta ${functionName}: ${functionResult}`);
+              } else if (functionName === "listar_eventos_calendario") {
+                this.logger.log(`Executando ferramenta: ${functionName} para conversationId: ${currentConversationId}`);
+                const args = JSON.parse(toolCall.function.arguments);
+
+                if (args.startDate && isNaN(new Date(args.startDate).getTime())) {
+                  throw new Error("Argumento inválido para listar_eventos_calendario: startDate deve ser uma data válida se fornecido.");
+                }
+                if (args.endDate && isNaN(new Date(args.endDate).getTime())) {
+                  throw new Error("Argumento inválido para listar_eventos_calendario: endDate deve ser uma data válida se fornecido.");
+                }
+                
+                let conversationIdToFilter: string | undefined = undefined;
+                if (currentConversationId && mainAgentConversationId && currentConversationId === mainAgentConversationId) {
+                  this.logger.log(`Chamada de listar_eventos_calendario originada pelo MainAgent. Filtrando por conversationId: ${mainAgentConversationId}`);
+                  conversationIdToFilter = mainAgentConversationId;
+                } else {
+                  // Se não for o MainAgent, a ferramenta agora não aceita conversationId da IA para filtro.
+                  // Portanto, listará eventos com base apenas nas datas, para todas as conversas,
+                  // ou nenhum se as datas não forem fornecidas (comportamento de findEventsByCriteria).
+                  this.logger.log(`Chamada de listar_eventos_calendario não originada pelo MainAgent ou MainAgent não configurado. Não filtrará por conversationId específico via esta lógica.`);
+                }
+
+                const events = await this.calendarService.findEventsByCriteria(
+                  args.startDate,
+                  args.endDate,
+                  conversationIdToFilter, // Usar o ID do MainAgent se aplicável
+                );
+                if (events.length > 0) {
+                  functionResult = JSON.stringify({ success: true, events });
+                } else {
+                  functionResult = JSON.stringify({ success: true, message: "Nenhum evento encontrado para os critérios fornecidos." });
+                }
+                this.logger.log(`Resultado da ferramenta ${functionName}: ${functionResult}`);
+              } else {
+                this.logger.warn(`Ferramenta solicitada desconhecida ou não implementada: ${functionName}`);
+                functionResult = `Erro: Ferramenta ${functionName} não encontrada ou não suportada.`;
+              }
+            } catch (error) {
+              this.logger.error(`Erro ao executar a ferramenta ${functionName}: ${error.message}`, error.stack);
+              functionResult = JSON.stringify({ success: false, error: `Erro ao executar ${functionName}: ${error.message}` });
+            }
+            
+            messagesForSecondCall.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              name: functionName,
+              content: functionResult,
+            });
+          }
+
+          // Preparar a segunda requisição
+          const secondRequestBody: any = {
+            model: initialRequestBody.model,
+            messages: messagesForSecondCall,
+          };
+          if (initialRequestBody.temperature) secondRequestBody.temperature = initialRequestBody.temperature;
+          if (initialRequestBody.max_tokens) secondRequestBody.max_tokens = initialRequestBody.max_tokens;
+          
+          this.logger.debug('Enviando segunda requisição para OpenAI com resultado da ferramenta:', JSON.stringify(secondRequestBody));
+          response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify(secondRequestBody),
+          });
+
+          this.logger.log(`Status da segunda resposta: ${response.status} ${response.statusText}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            this.logger.error(`API OpenAI (2ª chamada) retornou status ${response.status}: ${errorText}`);
+            return `Erro na API OpenAI (${response.status}) após chamada de ferramenta: ${errorText}`;
+          }
+          responseData = await response.json();
+          this.logger.debug('Resposta da segunda chamada OpenAI:', JSON.stringify(responseData));
+        }
         
-        // Extrair o texto da resposta
-        if (responseData.choices && responseData.choices.length > 0 && 
+        // Extrair o texto da resposta final (seja da primeira ou segunda chamada)
+        if (responseData.choices && responseData.choices.length > 0 &&
             responseData.choices[0].message && responseData.choices[0].message.content) {
           
           let finalResponseText = responseData.choices[0].message.content;
           
-          // Processar a resposta para remover possíveis timestamps no início
           const timestampRegexes = [
-            /^\s*\[\d{1,2}:\d{2}(:\d{2})?\]\s*/,                      // [HH:MM] ou [HH:MM:SS]
-            /^\s*\d{1,2}:\d{2}(:\d{2})?\s*/,                          // HH:MM ou HH:MM:SS
-            /^\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*/,                      // (HH:MM) ou (HH:MM:SS)
-            /^\s*\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(:\d{2})?\s*/     // DD/MM/YYYY HH:MM ou DD/MM/YYYY HH:MM:SS
+            /^\s*\[\d{1,2}:\d{2}(:\d{2})?\]\s*/,
+            /^\s*\d{1,2}:\d{2}(:\d{2})?\s*/,
+            /^\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*/,
+            /^\s*\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(:\d{2})?\s*/
           ];
-          
           for (const regex of timestampRegexes) {
             if (regex.test(finalResponseText)) {
               finalResponseText = finalResponseText.replace(regex, '');
-              break; // Parar após encontrar o primeiro formato
+              break;
             }
           }
-          
-          // Verificar se a resposta começa com "Assistente:" ou "Assistente [HH:MM]:"
           const assistantPrefixRegex = /^\s*(Assistente(\s*\[\d{1,2}:\d{2}(:\d{2})?\])?\s*:)\s*/;
           if (assistantPrefixRegex.test(finalResponseText)) {
             finalResponseText = finalResponseText.replace(assistantPrefixRegex, '');
           }
-          
           return finalResponseText;
         }
         
-        // Se não conseguir extrair a resposta, retornar o JSON completo
         return `Resposta não processada: ${JSON.stringify(responseData)}`;
       } catch (fetchError) {
         this.logger.error('Erro durante a requisição fetch:', fetchError);

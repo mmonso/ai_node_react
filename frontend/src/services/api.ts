@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Conversation, Message, ModelConfig, FileResponse, Model, Folder } from '../types'; // Adicionar Folder
+import { Conversation, Message, ModelConfig, FileResponse, Model, Folder, MainAgentData } from '../types';
 
 const API_URL = 'http://localhost:3001/api';
 const BASE_URL = 'http://localhost:3001'; // Base URL para arquivos estáticos
@@ -10,7 +10,7 @@ export const getConversations = async (): Promise<Conversation[]> => {
   return response.data;
 };
 
-export const getConversation = async (id: number): Promise<Conversation> => {
+export const getConversation = async (id: string): Promise<Conversation> => {
   const response = await axios.get(`${API_URL}/conversations/${id}`);
   
   // Processar URLs de imagens para garantir que elas sejam absolutas
@@ -48,7 +48,7 @@ export const createConversation = async (
 };
 
 export const updateConversation = async (
-  id: number,
+  id: string,
   title: string,
   isPersona?: boolean,
   systemPrompt?: string | null
@@ -57,19 +57,19 @@ export const updateConversation = async (
   return response.data;
 };
 
-export const deleteConversation = async (id: number): Promise<void> => {
+export const deleteConversation = async (id: string): Promise<void> => {
   await axios.delete(`${API_URL}/conversations/${id}`);
 };
 
 // API de Mensagens
-export const getMessages = async (conversationId: number): Promise<Message[]> => {
+export const getMessages = async (conversationId: string): Promise<Message[]> => {
   const response = await axios.get(`${API_URL}/conversations/${conversationId}/messages`);
   return response.data;
 };
 
 export const sendMessage = async (
-  conversationId: number, 
-  content: string, 
+  conversationId: string,
+  content: string,
   file?: File,
   modelConfig?: ModelConfig,
   useWebSearch: boolean = false
@@ -145,17 +145,17 @@ export const createFolder = async (data: { name: string; systemPrompt?: string }
   return response.data;
 };
 
-export const updateFolder = async (id: number, data: Partial<{ name?: string; systemPrompt?: string }>): Promise<Folder> => {
+export const updateFolder = async (id: string, data: Partial<{ name?: string; systemPrompt?: string }>): Promise<Folder> => {
   const response = await axios.patch(`${API_URL}/folders/${id}`, data);
   return response.data;
 };
 
-export const deleteFolder = async (id: number): Promise<void> => {
+export const deleteFolder = async (id: string): Promise<void> => {
   await axios.delete(`${API_URL}/folders/${id}`);
 };
 
 // Função para mover conversa para uma pasta (ou remover de uma pasta)
-export const moveConversationToFolder = async (conversationId: number, folderId: number | null): Promise<Conversation> => {
+export const moveConversationToFolder = async (conversationId: string, folderId: string | null): Promise<Conversation> => {
   if (folderId === null) {
     // Usa o endpoint DELETE para desassociar a conversa da pasta
     const response = await axios.delete(`${API_URL}/conversations/${conversationId}/folder`);
@@ -196,8 +196,8 @@ export const updateModelAvailability = async (id: string, isAvailable: boolean):
 };
 
 export const updateConversationModel = async (
-  conversationId: number, 
-  modelId: string, 
+  conversationId: string,
+  modelId: string,
   modelConfig?: ModelConfig
 ): Promise<Conversation> => {
   console.log(`API: Atualizando modelo da conversa ${conversationId} para modelo ${modelId}`, { modelConfig });
@@ -261,4 +261,33 @@ export const updateActiveModelConfig = async (modelConfig: any): Promise<boolean
   }
 };
 
-export default axios; 
+// API de Agentes Removida
+// export const getAgents = async (): Promise<Agent[]> => { ... };
+// export const createAgent = async (name: string, systemPrompt?: string | null): Promise<Agent> => { ... };
+// export const updateAgent = async (id: string, name?: string, systemPrompt?: string | null): Promise<Agent> => { ... };
+// export const deleteAgent = async (id: string): Promise<void> => { ... };
+
+// API para o Main Agent
+export const getMainAgent = async (): Promise<MainAgentData | null> => {
+  try {
+    const response = await axios.get(`${API_URL}/agents/main`);
+    return response.data;
+  } catch (error) {
+    console.error('API: Erro ao buscar o Main Agent:', error);
+    return null;
+  }
+};
+
+export const updateMainAgent = async (conversationId: string): Promise<MainAgentData | null> => {
+  try {
+    console.log('API: Atualizando conversationId do Main Agent para:', conversationId);
+    const response = await axios.put(`${API_URL}/agents/main/conversation`, { conversationId });
+    console.log('API: Resposta da atualização do Main Agent:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('API: Erro ao atualizar o conversationId do Main Agent:', error);
+    return null;
+  }
+};
+
+export default axios;

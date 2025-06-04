@@ -15,8 +15,8 @@ export class ConversationFolderService {
     private foldersRepository: Repository<Folder>,
   ) {}
 
-  async addConversationToFolder(conversationId: number, folderId: number): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+  async addConversationToFolder(conversationId: string, folderId: number): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: String(conversationId) });
     if (!conversation) {
       throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
     }
@@ -34,8 +34,8 @@ export class ConversationFolderService {
     return this.conversationsRepository.save(conversation);
   }
 
-  async removeConversationFromFolder(conversationId: number): Promise<Conversation> {
-    const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
+  async removeConversationFromFolder(conversationId: string): Promise<Conversation> {
+    const conversation = await this.conversationsRepository.findOneBy({ id: String(conversationId) });
     if (!conversation) {
       throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);
     }

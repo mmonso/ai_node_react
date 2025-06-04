@@ -36,7 +36,7 @@ export class ConversationsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: number): Promise<Conversation> {
+  findOne(@Param('id') id: string): Promise<Conversation> {
     return this.conversationsService.findOne(id);
   }
 
@@ -47,14 +47,14 @@ export class ConversationsController {
 
   @Put(':id')
   update(
-    @Param('id') id: number,
+    @Param('id') id: string,
     @Body() body: { title: string; isPersona?: boolean; systemPrompt?: string | null },
   ): Promise<Conversation> {
     return this.conversationsService.update(id, body.title, body.isPersona, body.systemPrompt);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: number): Promise<void> {
+  delete(@Param('id') id: string): Promise<void> {
     return this.conversationsService.delete(id);
   }
 
@@ -63,7 +63,7 @@ export class ConversationsController {
   @Post(':conversationId/folder/:folderId')
   @HttpCode(HttpStatus.OK) // Retorna 200 OK em vez de 201 Created
   addConversationToFolder(
-    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Param('conversationId') conversationId: string,
     @Param('folderId', ParseIntPipe) folderId: number,
   ): Promise<Conversation> {
     this.logger.log(`Adicionando conversa ${conversationId} à pasta ${folderId}`);
@@ -73,7 +73,7 @@ export class ConversationsController {
   @Delete(':conversationId/folder')
   @HttpCode(HttpStatus.OK) // Retorna 200 OK
   removeConversationFromFolder(
-    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Param('conversationId') conversationId: string,
   ): Promise<Conversation> {
     this.logger.log(`Removendo conversa ${conversationId} da pasta`);
     return this.conversationFolderService.removeConversationFromFolder(conversationId);
@@ -84,7 +84,7 @@ export class ConversationsController {
   @Patch(':conversationId/model')
   @HttpCode(HttpStatus.OK)
   updateConversationModel(
-    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Param('conversationId') conversationId: string,
     @Body() body: { modelId: string; modelConfig?: any },
   ): Promise<Conversation> {
     this.logger.log(`Atualizando modelo da conversa ${conversationId} para ${body.modelId}`);
@@ -133,7 +133,7 @@ export class ConversationsController {
   @Post(':id/messages')
   @UseInterceptors(FileInterceptor('file'))
   async addMessage(
-    @Param('id') id: number,
+    @Param('id') id: string,
     @Body() body: { content: string; modelConfig?: string },
     @Query('web_search', new DefaultValuePipe(false), ParseBoolPipe) useWebSearch: boolean,
     @UploadedFile() file?: Express.Multer.File,

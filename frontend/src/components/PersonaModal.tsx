@@ -5,7 +5,10 @@ import { Conversation } from '../types';
 interface PersonaModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string, systemPrompt: string | null) => void;
+  onSave: (
+    name: string,
+    systemPrompt: string | null
+  ) => void;
   personaToEdit?: Conversation | null;
 }
 
@@ -49,6 +52,16 @@ const FormGroup = styled.div`
 const Label = styled.label`
   color: #f0f0f0;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px; // Espaço entre o checkbox e o texto
+`;
+
+const Checkbox = styled.input.attrs({ type: 'checkbox' })`
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #61dafb; // Cor do checkbox quando marcado
 `;
 
 const Input = styled.input`
@@ -61,6 +74,37 @@ const Input = styled.input`
   &:focus {
     outline: none;
     border-color: #61dafb;
+  }
+`;
+
+const ReadOnlyInput = styled(Input)`
+  background-color: #333; // Um pouco diferente para indicar que é readonly
+  cursor: not-allowed;
+`;
+
+const InstructionsSection = styled.div`
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #3a3f4b;
+  border-radius: 4px;
+  border: 1px solid #444;
+  color: #f0f0f0;
+  font-size: 0.9rem;
+
+  p {
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  code {
+    background-color: #282c34;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+  }
+
+  strong {
+    color: #61dafb;
   }
 `;
 
@@ -155,6 +199,9 @@ const PersonaModal: React.FC<PersonaModalProps> = ({ isOpen, onClose, onSave, pe
             placeholder="Defina um prompt de sistema para esta persona"
           />
         </FormGroup>
+
+        {/* Seção de Integração com Telegram REMOVIDA */}
+
         <ButtonContainer>
           <Button className="secondary" onClick={onClose}>
             Cancelar

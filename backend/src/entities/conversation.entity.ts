@@ -6,8 +6,8 @@ import { Folder } from './folder.entity';
 @Entity('conversations') // Especificando o nome da tabela explicitamente
 @Index(['folderId']) // Adicionando índice para folderId
 export class Conversation {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column()
   title: string;
@@ -51,4 +51,5 @@ export class Conversation {
     topK?: number;
     maxOutputTokens: number;
   };
+
 }

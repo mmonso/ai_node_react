@@ -40,15 +40,22 @@ export class ConversationsService {
     });
   }
 
-  async findOne(id: number): Promise<Conversation> {
-    return this.conversationsRepository.findOne({
+  async findOne(id: string): Promise<Conversation> {
+    this.logger.log(`SERVICE: Buscando conversa com ID: ${id}`);
+    const conversation = await this.conversationsRepository.findOne({
       where: { id },
       relations: ['messages', 'model'],
       order: { messages: { timestamp: 'ASC' } },
     });
+    if (conversation) {
+      this.logger.log(`SERVICE: Conversa ${id} encontrada. Número de mensagens: ${conversation.messages?.length ?? 0}. Título: "${conversation.title}"`);
+    } else {
+      this.logger.warn(`SERVICE: Conversa com ID: ${id} não encontrada.`);
+    }
+    return conversation;
   }
 
-  async findOneWithFolder(id: number): Promise<Conversation> {
+  async findOneWithFolder(id: string): Promise<Conversation> {
     return this.conversationsRepository.findOne({
       where: { id },
       relations: ['messages', 'model', 'folder'], // Inclui a relação 'folder'
@@ -71,7 +78,7 @@ export class ConversationsService {
     return this.conversationsRepository.save(conversation);
   }
 
-  async update(id: number, title: string, isPersona?: boolean, systemPrompt?: string | null): Promise<Conversation> {
+  async update(id: string, title: string, isPersona?: boolean, systemPrompt?: string | null): Promise<Conversation> {
     const updatePayload: Partial<Conversation> = { title, updatedAt: new Date() };
 
     if (isPersona !== undefined) {
@@ -87,7 +94,7 @@ export class ConversationsService {
     return this.findOne(id);
   }
 
-  async delete(id: number): Promise<void> {
+  async delete(id: string): Promise<void> {
     // Deleta todas as mensagens relacionadas à conversa
     await this.messagesRepository
       .createQueryBuilder()
@@ -99,7 +106,7 @@ export class ConversationsService {
     await this.conversationsRepository.delete(id);
   }
 
-  async addUserMessage(conversationId: number, content: string, imageUrl?: string, fileUrl?: string): Promise<Message> {
+  async addUserMessage(conversationId: string, content: string, imageUrl?: string, fileUrl?: string): Promise<Message> {
     const conversation = await this.conversationsRepository.findOne({
       where: { id: conversationId },
       relations: ['model', 'folder'],
@@ -126,7 +133,7 @@ export class ConversationsService {
     // A lógica de quando chamar (ex: só na primeira mensagem) está dentro do ConversationTitleService.
     
     // Recarrega a conversa para garantir que 'messages' esteja atualizado para o ConversationTitleService
-    const updatedConversation = await this.findOne(conversationId); // findOne carrega as mensagens
+    const updatedConversation = await this.findOne(conversationId); // findOne agora aceita string e carrega as mensagens
     if (updatedConversation) {
        // A primeira mensagem é a que acabamos de adicionar.
       await this.conversationTitleService.generateAndSetTitleIfNeeded(updatedConversation, content);

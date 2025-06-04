@@ -23,24 +23,24 @@ interface FolderSectionProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   isDragOver: boolean;
-  openFolderOptionsId: number | null;
+  openFolderOptionsId: string | null;
   folderMenuButtonRef: React.RefObject<HTMLButtonElement | null>; // Aceitar null
   folderMenuRef: React.RefObject<HTMLDivElement | null>; // Aceitar null
-  toggleFolderOptionsMenu: (e: React.MouseEvent, folderId: number) => void;
+  toggleFolderOptionsMenu: (e: React.MouseEvent, folderId: string) => void;
   onEditFolder: () => void;
-  onDeleteFolder: (folderId: number) => void;
-  handleDragStart: (e: React.DragEvent, conversationId: number) => void;
-  draggingConversationId: number | null;
+  onDeleteFolder: (folderId: string) => void;
+  handleDragStart: (e: React.DragEvent, conversationId: string) => void;
+  draggingConversationId: string | null;
   conversationIdParams: string | undefined; // Para destacar a conversa ativa
   // Adicionar handlers para mouse enter/leave para mostrar o botão de opções da conversa
-  handleConversationMouseEnter: (e: React.MouseEvent, conversationId: number) => void;
+  handleConversationMouseEnter: (e: React.MouseEvent, conversationId: string) => void;
   handleConversationMouseLeave: () => void;
-  openConversationOptionsId: number | null;
+  openConversationOptionsId: string | null;
   conversationMenuButtonRef: React.RefObject<HTMLButtonElement | null>;
   conversationMenuRef: React.RefObject<HTMLDivElement | null>;
-  toggleConversationOptionsMenu: (e: React.MouseEvent, conversationId: number) => void;
+  toggleConversationOptionsMenu: (e: React.MouseEvent, conversationId: string) => void;
   startEditingConversation: (conversation: Conversation) => void;
-  handleDeleteConversation: (conversationId: number, isPersona?: boolean) => void;
+  handleDeleteConversation: (conversationId: string, isPersona?: boolean) => void;
 }
 
 const FolderSection: React.FC<FolderSectionProps> = ({
@@ -112,7 +112,7 @@ const FolderSection: React.FC<FolderSectionProps> = ({
           {conversations.map((conv) => (
             <ConversationItem
               key={conv.id}
-              $active={Number(activeConversationIdFromParams) === conv.id}
+              $active={activeConversationIdFromParams === conv.id}
               draggable
               onDragStart={(e) => handleDragStart(e, conv.id)}
               onMouseEnter={(e) => handleConversationMouseEnter(e, conv.id)}

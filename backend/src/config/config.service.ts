@@ -6,12 +6,21 @@ import { Config } from '../entities/config.entity';
 @Injectable()
 export class ConfigService {
   private DEFAULT_SYSTEM_PROMPT = 'Você é um assistente de IA prestativo, respeitoso e honesto.';
+  private readonly _telegramBotToken: string;
 
   constructor(
     @InjectRepository(Config)
     private configRepository: Repository<Config>,
   ) {
+    this._telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!this._telegramBotToken) {
+      throw new Error('Variável de ambiente TELEGRAM_BOT_TOKEN não definida.');
+    }
     this.initializeConfig();
+  }
+
+  public get telegramBotToken(): string {
+    return this._telegramBotToken;
   }
 
   private async initializeConfig(): Promise<void> {

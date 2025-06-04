@@ -143,21 +143,34 @@ const ChatPage: React.FC = () => {
   // Efeito para carregar a conversa inicialmente
   useEffect(() => {
     if (id) {
-      console.log(`ChatPage: Carregando conversa ${id} pela primeira vez`);
+      console.log(`ChatPage: Carregando conversa ${id} (ID mudou ou carga inicial)`);
+      // Limpar o estado da conversa anterior e definir o carregamento
+      // para evitar exibir brevemente dados obsoletos de outra conversa.
+      setConversation(null); 
+      setIsLoading(true); 
       loadConversation();
+    } else {
+      // Se não houver ID, talvez limpar a conversa ou tratar como erro.
+      // Por enquanto, se o ID for removido (ex: navegando para fora), não faz nada aqui.
+      // A lógica de desmontagem do componente já lida com a limpeza de timers/URLs.
     }
-  }, [id]);
+  }, [id]); // Dispara quando 'id' muda
   
   useEffect(() => {
     scrollToBottom();
   }, [conversation?.messages]);
   
   const loadConversation = async () => {
+    if (!id) {
+      setError("ID da conversa não encontrado na URL.");
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       console.log(`ChatPage: Carregando conversa ${id}...`);
       
-      const data = await getConversation(Number(id));
+      const data = await getConversation(id);
       console.log(`ChatPage: Conversa carregada:`, {
         id: data.id,
         title: data.title,
@@ -227,7 +240,7 @@ const ChatPage: React.FC = () => {
     
     const userMessage: Message = {
       id: Date.now(),
-      conversationId: Number(id),
+      conversationId: id, // id é garantido como string pela verificação no início da função
       content,
       isUser: true,
       imageUrl: temporaryImageUrl,
@@ -239,7 +252,7 @@ const ChatPage: React.FC = () => {
       if (!prevConversation) {
         // Se de alguma forma for null, criar uma nova conversa com os valores mínimos
         return {
-          id: conversation?.id || 0,
+          id: id, // Usar o id da URL que é string
           title: conversation?.title || 'Nova Conversa',
           createdAt: conversation?.createdAt || new Date().toISOString(),
           updatedAt: conversation?.updatedAt || new Date().toISOString(),
@@ -259,7 +272,7 @@ const ChatPage: React.FC = () => {
     
     try {
       // Envia a mensagem e recebe a resposta do bot
-      const updatedMessages = await sendMessage(Number(id), content, file, config, useWebSearch);
+      const updatedMessages = await sendMessage(id, content, file, config, useWebSearch);
       
       // Log para depuração
       console.log('Mensagens recebidas do servidor:', updatedMessages);
@@ -279,7 +292,7 @@ const ChatPage: React.FC = () => {
             if (!prevConversation) {
               // Se de alguma forma for null, criar uma nova conversa com os valores mínimos
               return {
-                id: conversation?.id || 0,
+                id: id, // Usar o id da URL que é string
                 title: conversation?.title || 'Nova Conversa',
                 createdAt: conversation?.createdAt || new Date().toISOString(),
                 updatedAt: conversation?.updatedAt || new Date().toISOString(),
@@ -393,7 +406,7 @@ const updateMessageInConversation = (updatedMessage: Message) => {
               {showTyping && (
                 <ChatMessage isTyping={true} message={{
                   id: -1, // ID temporário
-                  conversationId: Number(id),
+                  conversationId: id || '', // Garante que id é string ou string vazia
                   content: '',
                   isUser: false,
                   timestamp: new Date().toISOString()

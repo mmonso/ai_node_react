@@ -4,6 +4,8 @@ import { Message } from './src/entities/message.entity';
 import { Conversation } from './src/entities/conversation.entity';
 import { Folder } from './src/entities/folder.entity';
 import { Config } from './src/entities/config.entity';
+import { Event } from './src/entities/event.entity'; // Nova entidade importada
+import { AgentEntity } from './src/entities/agent.entity';
 import { join } from 'path';
 // import * as path from 'path'; // Comentado ou removido
 
@@ -14,7 +16,7 @@ console.log(`[DEBUG] TypeORM CLI - Database Path: ${dbPath}`);
 export default new DataSource({
   type: 'sqlite',
   database: dbPath,
-  entities: [Model, Message, Conversation, Folder, Config],
+  entities: [Model, Message, Conversation, Folder, Config, Event, AgentEntity], // Event adicionado
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
   logging: false, // Adicionado para desabilitar logs de query do TypeORM

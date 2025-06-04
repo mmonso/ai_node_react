@@ -16,19 +16,19 @@ import { Conversation } from '../types';
 interface PersonaSectionProps {
   personas: Conversation[];
   conversationId?: string;
-  editingId: number | null;
+  editingId: string | null;
   editingTitle: string;
-  openOptionsId: number | null;
+  openOptionsId: string | null;
   menuButtonRef: React.RefObject<HTMLButtonElement | null>;
   menuRef: React.RefObject<HTMLDivElement | null>;
-  setEditingId: (id: number | null) => void;
+  setEditingId: (id: string | null) => void;
   setEditingTitle: (title: string) => void;
-  handleUpdateConversation: (id: number, isPersona: boolean, systemPrompt?: string | null) => Promise<void>;
-  toggleOptionsMenu: (e: React.MouseEvent, id: number) => void;
+  handleUpdateConversation: (id: string, isPersona: boolean, systemPrompt?: string | null) => Promise<void>;
+  toggleOptionsMenu: (e: React.MouseEvent, id: string) => void;
   startEditing: (item: Conversation) => void;
   handleOpenPersonaModal: (persona?: Conversation) => void;
-  handleDeleteConversation: (id: number, isPersona: boolean) => Promise<void>;
-  handleMouseEnter: (e: React.MouseEvent, conversationId: number) => void;
+  handleDeleteConversation: (id: string, isPersona: boolean) => Promise<void>;
+  handleMouseEnter: (e: React.MouseEvent, conversationId: string) => void;
   handleMouseLeave: () => void;
 }
 
@@ -59,7 +59,7 @@ const PersonaSection: React.FC<PersonaSectionProps> = ({
         {personas.map((persona) => (
           <ConversationItem
             key={persona.id}
-            $active={Number(conversationId) === persona.id}
+            $active={conversationId === persona.id}
             onMouseEnter={(e) => handleMouseEnter(e, persona.id)}
             onMouseLeave={handleMouseLeave}
           >

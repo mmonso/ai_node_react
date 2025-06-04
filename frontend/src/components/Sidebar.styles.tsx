@@ -494,3 +494,16 @@ export const SectionDivider = styled.div`
   margin: 1rem 1rem; /* Adiciona margem vertical e nas laterais para alinhar com o padding dos SectionHeaders */
   opacity: 0.6;
 `;
+
+export const AgentItem = styled(ConversationItem)`
+  background-color: rgba(var(--accent-color-rgb), 0.05);
+  border-left: 3px solid var(--accent-color);
+  
+  svg {
+    color: var(--accent-color);
+  }
+  
+  &:hover {
+    background-color: rgba(var(--accent-color-rgb), 0.1);
+  }
+`;

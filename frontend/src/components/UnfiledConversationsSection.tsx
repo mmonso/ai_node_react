@@ -21,28 +21,28 @@ import { Conversation } from '../types'; // Removido Folder
 interface UnfiledConversationsSectionProps {
   conversations: Conversation[]; // Renomeado de unfiledConversations
   conversationId?: string;
-  editingId: number | null;
+  editingId: string | null;
   editingTitle: string;
-  openOptionsId: number | null;
+  openOptionsId: string | null;
   // activeMoveToFolderMenu removido
   menuButtonRef: React.RefObject<HTMLButtonElement | null>;
   menuRef: React.RefObject<HTMLDivElement | null>;
   // folders: Folder[]; // Removido
 
-  handleMouseEnter: (e: React.MouseEvent, conversationId: number) => void;
+  handleMouseEnter: (e: React.MouseEvent, conversationId: string) => void;
   handleMouseLeave: () => void;
   startEditing: (item: Conversation) => void;
-  handleUpdateConversation: (id: number, isPersona?: boolean, systemPrompt?: string | null) => Promise<void>;
-  handleDeleteConversation: (id: number, isPersona?: boolean) => Promise<void>;
-  toggleOptionsMenu: (e: React.MouseEvent, id: number) => void;
+  handleUpdateConversation: (id: string, isPersona?: boolean, systemPrompt?: string | null) => Promise<void>;
+  handleDeleteConversation: (id: string, isPersona?: boolean) => Promise<void>;
+  toggleOptionsMenu: (e: React.MouseEvent, id: string) => void;
   // handleToggleMoveToFolderMenu removido
   // handleMoveConversationToFolder removido
-  setEditingId: (id: number | null) => void;
+  setEditingId: (id: string | null) => void;
   setEditingTitle: (title: string) => void;
-  handleDragStart: (e: React.DragEvent, conversationId: number) => void;
-  draggingConversationId: number | null; // Adicionada a prop
+  handleDragStart: (e: React.DragEvent, conversationId: string) => void;
+  draggingConversationId: string | null; // Adicionada a prop
   // setActiveMoveToFolderMenu removido
-  // setOpenOptionsId: (id: number | null) => void; // Definitivamente removido
+  // setOpenOptionsId: (id: string | null) => void; // Definitivamente removido
 }
 
 const UnfiledConversationsSection: React.FC<UnfiledConversationsSectionProps> = ({
@@ -78,7 +78,7 @@ const UnfiledConversationsSection: React.FC<UnfiledConversationsSectionProps> = 
       {conversations.map((conversation) => (
         <ConversationItem
           key={conversation.id}
-          $active={Number(conversationId) === conversation.id}
+          $active={conversationId === conversation.id}
           onMouseEnter={(e) => handleMouseEnter(e, conversation.id)}
           onMouseLeave={handleMouseLeave}
           draggable="true"

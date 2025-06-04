@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, ReactElement } from 'react';
-import { PlusIcon, ArrowRightIcon, MoreOptionsIcon, EditIcon, DeleteIcon, FolderIconSvg, NewFolderIcon, UserIcon } from './icons'; // GearIcon removido, ArrowRightIcon já estava importado
+import { PlusIcon, ArrowRightIcon, MoreOptionsIcon, EditIcon, DeleteIcon, FolderIconSvg, NewFolderIcon, UserIcon, BotIcon } from './icons';
 import {
   SidebarContainer,
   SidebarHeader,
@@ -19,9 +19,9 @@ import {
   SubMenuItem,
   EditForm,
   MenuButton,
-  FolderList, // Reintroduzir
-  // FolderItemContainer, FolderName, FolderIcon, ConversationsInFolderList, FolderConversationItem, CreateFolderForm - Removidos
-  SectionDivider, // Adicionado
+  FolderList,
+  SectionDivider,
+  AgentItem,
 } from './Sidebar.styles';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -30,23 +30,21 @@ import {
   createConversation,
   updateConversation,
   deleteConversation,
-  getFolders, // Adicionado
-  createFolder, // Adicionado
-  updateFolder, // Adicionado
-  deleteFolder, // Adicionado
-  moveConversationToFolder, // Adicionado
+  getFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  moveConversationToFolder,
 } from '../services/api';
-import { Conversation, Folder } from '../types'; // Adicionado Folder
+import { Conversation, Folder } from '../types';
 import SettingsModal from './SettingsModal';
 import PersonaModal from './PersonaModal';
-// import FloatingMenu from './common/FloatingMenu';
 import PersonaSection from './PersonaSection';
 import UnfiledConversationsSection from './UnfiledConversationsSection';
+import MainAgentSection from './MainAgentSection';
 import useModalState from '../hooks/useModalState';
-// Importar componentes que serão recriados/restaurados
 import FolderModal from './FolderModal';
 import FolderSection from './FolderSection';
-
 
 const Sidebar = (): ReactElement => {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -54,53 +52,41 @@ const Sidebar = (): ReactElement => {
   const {
     conversations, setConversations,
     personas, setPersonas,
-    folders, setFolders, // Reintroduzido
-    reloadTrigger
+    folders, setFolders,
+    reloadTrigger,
+    mainAgentConversationId,
+    mainAgentConversation // OBTER DO CONTEXTO
   } = useAppContext();
 
-  const [editingId, setEditingId] = useState<number | null>(null); // Para conversas e personas
-  const [editingTitle, setEditingTitle] = useState(''); // Para conversas e personas
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   
-  const [openOptionsId, setOpenOptionsId] = useState<number | null>(null); // Para conversas e personas
-  const [openFolderOptionsId, setOpenFolderOptionsId] = useState<number | null>(null); // Para pastas
+  const [openOptionsId, setOpenOptionsId] = useState<string | null>(null);
+  const [openFolderOptionsId, setOpenFolderOptionsId] = useState<string | null>(null);
 
-  const [draggingConversationId, setDraggingConversationId] = useState<number | null>(null);
-  const [hoveredConversationId, setHoveredConversationId] = useState<number | null>(null);
-  const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null); // Reintroduzido
+  const [draggingConversationId, setDraggingConversationId] = useState<string | null>(null);
+  const [hoveredConversationId, setHoveredConversationId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
 
-  const menuRef = useRef<HTMLDivElement>(null); // Menu de opções de conversa/persona
-  const menuButtonRef = useRef<HTMLButtonElement>(null); // Botão que abriu o menu de conversa/persona
-  const folderMenuRef = useRef<HTMLDivElement>(null); // Menu de opções de pasta
-  const folderMenuButtonRef = useRef<HTMLButtonElement>(null); // Botão que abriu o menu de pasta
-
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const folderMenuRef = useRef<HTMLDivElement>(null);
+  const folderMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   const settingsModal = useModalState();
   const personaModal = useModalState<Conversation>();
-  const folderModal = useModalState<Folder | undefined>(); // Para criar ou editar pasta
-
-  // Estados para criação/edição de pastas (serão gerenciados pelo FolderModal, mas podem ser iniciados aqui)
-  // const [isCreatingFolder, setIsCreatingFolder] = useState(false); // Gerenciado pelo folderModal.isOpen
-  // const [newFolderName, setNewFolderName] = useState('');
-  // const [newFolderSystemPrompt, setNewFolderSystemPrompt] = useState('');
-  // const [editingFolderId, setEditingFolderId] = useState<number | null>(null);
-  // const [editingFolderName, setEditingFolderName] = useState('');
-  // const [editingFolderSystemPrompt, setEditingFolderSystemPrompt] = useState('');
+  const folderModal = useModalState<Folder | undefined>();
   
-  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
-
-
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     try {
       const fetchedConversations = await getConversations();
-      const fetchedFolders = await getFolders(); // Carregar pastas
+      const fetchedFolders = await getFolders();
       
-      const normalConversations = fetchedConversations.filter((conv: Conversation) => !conv.isPersona);
-      const fetchedPersonas = fetchedConversations.filter((conv: Conversation) => conv.isPersona);
-      
-      setConversations(normalConversations);
-      setPersonas(fetchedPersonas);
-      setFolders(fetchedFolders); // Definir pastas
+      setConversations(fetchedConversations.filter(c => !c.isPersona));
+      setPersonas(fetchedConversations.filter(c => c.isPersona));
+      setFolders(fetchedFolders);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     }
@@ -111,148 +97,153 @@ const Sidebar = (): ReactElement => {
   }, [reloadTrigger, loadData]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-  
-      // Verifica clique no botão do menu de opções de conversa/persona
-      if (menuButtonRef.current && menuButtonRef.current.contains(target)) {
-        return;
+    const handleClickOutside = (event: MouseEvent) => {
+      // Fechar menu de opções de conversa/persona se clicar fora dele
+      if (
+        openOptionsId &&
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        menuButtonRef.current &&
+        !menuButtonRef.current.contains(event.target as Node)
+      ) {
+        setOpenOptionsId(null);
       }
-      // Verifica clique dentro do menu de opções de conversa/persona
-      if (menuRef.current && menuRef.current.contains(target)) {
-        return;
+
+      // Fechar menu de opções de pasta se clicar fora dele
+      if (
+        openFolderOptionsId &&
+        folderMenuRef.current &&
+        !folderMenuRef.current.contains(event.target as Node) &&
+        folderMenuButtonRef.current &&
+        !folderMenuButtonRef.current.contains(event.target as Node)
+      ) {
+        setOpenFolderOptionsId(null);
       }
-  
-      // Verifica clique no botão do menu de opções de pasta
-      if (folderMenuButtonRef.current && folderMenuButtonRef.current.contains(target)) {
-        return;
-      }
-      // Verifica clique dentro do menu de opções de pasta
-      if (folderMenuRef.current && folderMenuRef.current.contains(target)) {
-        return;
-      }
-      
-      // Se o clique foi fora de todos os menus e botões relevantes, feche os menus.
-      setOpenOptionsId(null);
-      setOpenFolderOptionsId(null);
-    }
+    };
   
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []); // Nenhuma dependência específica, pois os refs são estáveis.
-
+  }, [openOptionsId, openFolderOptionsId]);
 
   const handleNewConversationClick = async () => {
     try {
-      const newConversation = await createConversation('Nova Conversa');
-      setConversations((prev: Conversation[]) => [newConversation, ...prev]);
+      const newConversation = await createConversation('Nova conversa');
+      setConversations(prev => [newConversation, ...prev]);
       navigate(`/chat/${newConversation.id}`);
     } catch (error) {
       console.error('Erro ao criar nova conversa:', error);
     }
   };
 
-  const handleUpdateConversation = async (id: number, isPersona: boolean = false) => {
-    if (editingId === id && editingTitle.trim() !== '') {
-      try {
-        const updated = await updateConversation(id, editingTitle, isPersona);
-        if (isPersona) {
-          setPersonas((prev: Conversation[]) => prev.map(p => (p.id === id ? updated : p)));
-        } else {
-          setConversations((prev: Conversation[]) => prev.map(conv => (conv.id === id ? updated : conv)));
-        }
-        setEditingId(null);
-        setEditingTitle('');
-      } catch (error) {
-        console.error('Erro ao atualizar conversa:', error);
+  const handleUpdateConversation = async (id: string, isPersona: boolean = false) => {
+    if (!editingTitle.trim()) return;
+    
+    try {
+      const updated = await updateConversation(id, editingTitle);
+      
+      if (isPersona) {
+        setPersonas(prev => prev.map(p => p.id === id ? { ...p, title: editingTitle } : p));
+      } else {
+        setConversations(prev => prev.map(c => c.id === id ? { ...c, title: editingTitle } : c));
       }
+      
+      setEditingId(null);
+      setEditingTitle('');
+    } catch (error) {
+      console.error('Erro ao atualizar conversa:', error);
     }
   };
 
-  const handleDeleteConversation = async (id: number, isPersona: boolean = false) => {
+  const handleDeleteConversation = async (id: string, isPersona: boolean = false) => {
     try {
       await deleteConversation(id);
+      
       if (isPersona) {
-        setPersonas((prev: Conversation[]) => prev.filter(p => p.id !== id));
+        setPersonas(prev => prev.filter(p => p.id !== id));
       } else {
-        setConversations((prev: Conversation[]) => prev.filter(conv => conv.id !== id));
+        setConversations(prev => prev.filter(c => c.id !== id));
       }
-      if (Number(conversationId) === id) {
+      
+      // Se a conversa atual for excluída, redirecionar para a página inicial
+      if (conversationId === id) {
         navigate('/');
       }
     } catch (error) {
-      console.error('Erro ao deletar conversa:', error);
-    } finally {
-      setOpenOptionsId(null);
+      console.error('Erro ao excluir conversa:', error);
     }
   };
 
   const startEditing = (item: Conversation) => {
     setEditingId(item.id);
-    setEditingTitle(item.title);
-    setOpenOptionsId(null);
+    setEditingTitle(item.title || '');
   };
 
-  const toggleOptionsMenu = (e: React.MouseEvent, id: number) => {
+  const toggleOptionsMenu = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     menuButtonRef.current = e.currentTarget as HTMLButtonElement;
     setOpenOptionsId(openOptionsId === id ? null : id);
   };
 
-
-  const handleDragStart = (e: React.DragEvent, conversationId: number) => {
+  // Funções para drag and drop
+  const handleDragStart = (e: React.DragEvent, conversationId: string) => {
+    e.dataTransfer.setData('conversationId', conversationId);
     setDraggingConversationId(conversationId);
-    e.dataTransfer.effectAllowed = 'move';
-    // Opcional: definir uma imagem de arrastar personalizada
-    // e.dataTransfer.setData('text/plain', conversationId.toString());
   };
 
-  const handleDragOver = (e: React.DragEvent, folderId?: number) => {
+  const handleDragOver = (e: React.DragEvent, folderId?: string) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.stopPropagation();
     if (folderId) {
       setDragOverFolderId(folderId);
-    } else {
-      setDragOverFolderId(null); // Limpa se estiver sobre a área não arquivada
     }
   };
 
-  const handleDropOnFolder = async (e: React.DragEvent, folderId: number) => {
+  const handleDropOnFolder = async (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
-    e.stopPropagation(); // Impede que o evento de drop se propague para o container pai
-    if (draggingConversationId) {
-      try {
-        const updatedConv = await moveConversationToFolder(draggingConversationId, folderId);
-        // Atualizar o estado local das conversas
-        setConversations(prevConvs =>
-          prevConvs.map(c => c.id === updatedConv.id ? updatedConv : c)
-        );
-        // Opcional: atualizar a pasta para refletir a nova conversa (se a API retornar a pasta atualizada)
-      } catch (error) {
-        console.error('Erro ao mover conversa para pasta:', error);
-      }
+    const conversationId = e.dataTransfer.getData('conversationId');
+    if (!conversationId || conversationId === '') return;
+
+    try {
+      await moveConversationToFolder(conversationId, folderId);
+      
+      // Atualizar estado local
+      setConversations(prev => 
+        prev.map(c => c.id === conversationId 
+          ? { ...c, folderId, folder: folders.find(f => f.id === folderId) } 
+          : c
+        )
+      );
+    } catch (error) {
+      console.error('Erro ao mover conversa para pasta:', error);
+    } finally {
+      setDraggingConversationId(null);
+      setDragOverFolderId(null);
     }
-    setDraggingConversationId(null);
-    setDragOverFolderId(null);
   };
-  
+
   const handleDropOnUnfiled = async (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggingConversationId) {
-      try {
-        // Mover para "sem pasta" significa folderId = null
-        const updatedConv = await moveConversationToFolder(draggingConversationId, null);
-         setConversations(prevConvs =>
-          prevConvs.map(c => c.id === updatedConv.id ? updatedConv : c)
-        );
-      } catch (error) {
-        console.error('Erro ao mover conversa para não arquivadas:', error);
-      }
+    const conversationId = e.dataTransfer.getData('conversationId');
+    if (!conversationId || conversationId === '') return;
+
+    try {
+      // Mover para "sem pasta" significa passar null como folderId
+      await moveConversationToFolder(conversationId, null);
+      
+      // Atualizar estado local
+      setConversations(prev => 
+        prev.map(c => c.id === conversationId 
+          ? { ...c, folderId: null, folder: null } 
+          : c
+        )
+      );
+    } catch (error) {
+      console.error('Erro ao remover conversa da pasta:', error);
+    } finally {
+      setDraggingConversationId(null);
     }
-    setDraggingConversationId(null);
-    setDragOverFolderId(null);
   };
 
   const handleDragEnd = () => {
@@ -264,39 +255,45 @@ const Sidebar = (): ReactElement => {
     personaModal.openModal(persona);
   };
 
-  // handleClosePersonaModal não é mais necessário, personaModal.closeModal() será usado diretamente
-
   const handleSavePersona = async (name: string, systemPrompt: string | null) => {
     try {
       if (personaModal.data) {
-        const updatedPersona = await updateConversation(personaModal.data.id, name, true, systemPrompt);
-        setPersonas((prev: Conversation[]) => prev.map(p => (p.id === updatedPersona.id ? updatedPersona : p)));
+        // Editando persona existente
+        const updatedPersona = await updateConversation(
+          personaModal.data.id,
+          name,
+          true,
+          systemPrompt || undefined
+        );
+        
+        setPersonas(prev => 
+          prev.map(p => p.id === updatedPersona.id ? updatedPersona : p)
+        );
       } else {
-        const newPersona = await createConversation(name, undefined, true, systemPrompt);
-        setPersonas((prev: Conversation[]) => [...prev, newPersona]);
+        // Criando nova persona
+        const newPersona = await createConversation(
+          name,
+          undefined,
+          true,
+          systemPrompt || undefined
+        );
+        
+        setPersonas(prev => [newPersona, ...prev]);
       }
+      
+      personaModal.closeModal();
     } catch (error) {
       console.error('Erro ao salvar persona:', error);
     }
   };
 
-  const handleMouseEnter = (e: React.MouseEvent, conversationId: number) => {
+  const handleMouseEnter = (e: React.MouseEvent, conversationId: string) => {
     setHoveredConversationId(conversationId);
   };
 
   const handleMouseLeave = () => {
-    setTimeout(() => {
-      if (!menuRef.current?.contains(document.activeElement) && !menuButtonRef.current?.contains(document.activeElement)) {
-        setOpenOptionsId(null);
-      }
-    }, 100);
     setHoveredConversationId(null);
   };
-
-  // Não precisamos mais filtrar conversas não arquivadas, pois todas estarão "não arquivadas"
-  // const unfiledConversations = conversations; // Ou simplesmente usar 'conversations' diretamente
-
-  // Estados de edição de pasta removidos
 
   return (
     <SidebarContainer>
@@ -311,31 +308,45 @@ const Sidebar = (): ReactElement => {
         </LeftActions>
         <RightActions>
           <NewChatButton
-            onClick={() => handleOpenPersonaModal()}
-            title="Nova Persona"
+            onClick={handleNewConversationClick}
+            title="Nova conversa"
           >
-            <UserIcon />
+            <PlusIcon />
           </NewChatButton>
           <NewChatButton
-            onClick={() => folderModal.openModal(undefined) } // Abre para criar nova pasta
-            title="Nova Pasta"
+            onClick={() => folderModal.openModal()}
+            title="Nova pasta"
           >
             <NewFolderIcon />
           </NewChatButton>
           <NewChatButton
-            onClick={handleNewConversationClick}
-            title="Nova Conversa"
+            onClick={() => handleOpenPersonaModal()}
+            title="Nova persona"
           >
-            <PlusIcon />
+            <UserIcon />
           </NewChatButton>
         </RightActions>
       </SidebarHeader>
- 
+
       <SectionDivider />
- 
+
+      {/* Seção do agente principal no topo (fora da área de rolagem) */}
+      {mainAgentConversationId && mainAgentConversation && ( // Verificar ambos
+        <>
+          <SectionHeader>Assistente IA</SectionHeader>
+          <MainAgentSection
+            // conversations={conversations} // NÃO MAIS NECESSÁRIO AQUI
+            mainAgentConversationId={mainAgentConversationId}
+            agentConversationDetails={mainAgentConversation} // PASSAR O OBJETO
+            conversationId={conversationId} // ID da conversa ativa na URL
+          />
+          <SectionDivider />
+        </>
+      )}
+
       <ScrollableContent
-        onDragOver={(e) => handleDragOver(e)} // Ajustado para não passar folderId aqui
-        onDrop={handleDropOnUnfiled} // Área geral para soltar conversas não arquivadas
+        onDragOver={(e) => handleDragOver(e)}
+        onDrop={handleDropOnUnfiled}
       >
         <SectionHeader>Personas</SectionHeader>
         <PersonaSection
@@ -350,15 +361,15 @@ const Sidebar = (): ReactElement => {
           setEditingTitle={setEditingTitle}
           handleUpdateConversation={handleUpdateConversation}
           toggleOptionsMenu={toggleOptionsMenu}
-          startEditing={startEditing as (item: Conversation) => void}
+          startEditing={startEditing}
           handleOpenPersonaModal={handleOpenPersonaModal}
           handleDeleteConversation={handleDeleteConversation}
           handleMouseEnter={handleMouseEnter}
           handleMouseLeave={handleMouseLeave}
         />
- 
+
         <SectionDivider />
- 
+
         <SectionHeader>Pastas</SectionHeader>
         <FolderList>
           {folders.map((folder) => (
@@ -379,32 +390,27 @@ const Sidebar = (): ReactElement => {
               onDragOver={(e) => handleDragOver(e, folder.id)}
               onDrop={(e) => handleDropOnFolder(e, folder.id)}
               isDragOver={dragOverFolderId === folder.id}
-              // Props para menu de opções da pasta
               openFolderOptionsId={openFolderOptionsId}
               folderMenuButtonRef={folderMenuButtonRef}
               folderMenuRef={folderMenuRef}
-              toggleFolderOptionsMenu={(e, id) => { // Implementar toggleFolderOptionsMenu
-                 e.stopPropagation();
-                 folderMenuButtonRef.current = e.currentTarget as HTMLButtonElement;
-                 setOpenFolderOptionsId(openFolderOptionsId === id ? null : id);
+              toggleFolderOptionsMenu={(e, id: string) => {
+                e.stopPropagation();
+                folderMenuButtonRef.current = e.currentTarget as HTMLButtonElement;
+                setOpenFolderOptionsId(openFolderOptionsId === id ? null : id);
               }}
-              // Props para editar/deletar pasta
               onEditFolder={() => folderModal.openModal(folder)}
-              onDeleteFolder={async (id) => { // Implementar handleDeleteFolder
+              onDeleteFolder={async (id: string) => {
                 try {
                   await deleteFolder(id);
                   setFolders(prev => prev.filter(f => f.id !== id));
-                  // Também desassociar conversas no estado local se necessário, ou recarregar
                   setConversations(prev => prev.map(c => c.folderId === id ? {...c, folderId: null, folder: null} : c));
                 } catch (error) {
                   console.error("Erro ao deletar pasta:", error);
                 }
               }}
-              // Props para arrastar conversas
               handleDragStart={handleDragStart}
               draggingConversationId={draggingConversationId}
               conversationIdParams={conversationId}
-              // Props para menu de opções de conversa dentro da pasta
               handleConversationMouseEnter={handleMouseEnter}
               handleConversationMouseLeave={handleMouseLeave}
               openConversationOptionsId={openOptionsId}
@@ -416,12 +422,12 @@ const Sidebar = (): ReactElement => {
             />
           ))}
         </FolderList>
- 
+
         <SectionDivider />
-        
+
         <SectionHeader>Conversas</SectionHeader>
         <UnfiledConversationsSection
-          conversations={conversations.filter(c => !c.folderId)} // Apenas conversas sem pasta
+          conversations={conversations.filter(c => !c.folderId && c.id !== mainAgentConversationId)}
           conversationId={conversationId}
           editingId={editingId}
           editingTitle={editingTitle}
@@ -441,8 +447,6 @@ const Sidebar = (): ReactElement => {
         />
       </ScrollableContent>
 
-      {/* FloatingMenu para mover para pastas removido, a lógica de D&D é direta */}
-
       <SettingsModal
         isOpen={settingsModal.isOpen}
         onClose={settingsModal.closeModal}
@@ -450,15 +454,15 @@ const Sidebar = (): ReactElement => {
       <FolderModal
         isOpen={folderModal.isOpen}
         onClose={folderModal.closeModal}
-        onSave={async (name, systemPrompt) => { // Implementar handleSaveFolder
-          const folderData = folderModal.data;
+        onSave={async (name, systemPrompt) => {
           try {
-            if (folderData && folderData.id) { // Editando
-              const updated = await updateFolder(folderData.id, { name, systemPrompt });
-              setFolders(prev => prev.map(f => f.id === updated.id ? updated : f));
-            } else { // Criando
-              const newFolder = await createFolder({ name, systemPrompt });
-              setFolders(prev => [newFolder, ...prev]);
+            const folderData = { name, systemPrompt: systemPrompt || undefined };
+            if (folderModal.data) {
+              const updatedFolder = await updateFolder(folderModal.data.id, folderData);
+              setFolders(prev => prev.map(f => f.id === updatedFolder.id ? updatedFolder : f));
+            } else {
+              const newFolder = await createFolder(folderData);
+              setFolders(prev => [...prev, newFolder]);
             }
             folderModal.closeModal();
           } catch (error) {

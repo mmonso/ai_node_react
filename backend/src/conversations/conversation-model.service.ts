@@ -15,7 +15,7 @@ export class ConversationModelService {
     private modelsRepository: Repository<Model>,
   ) {}
 
-  async updateConversationModel(conversationId: number, modelId: string, modelConfig?: any): Promise<Conversation> {
+  async updateConversationModel(conversationId: string, modelId: string, modelConfig?: any): Promise<Conversation> {
     this.logger.log(`Atualizando modelo da conversa ${conversationId} para modelId=${modelId}`);
     
     const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
@@ -46,7 +46,7 @@ export class ConversationModelService {
     return this.conversationsRepository.save(conversation);
   }
   
-  async updateModelConfig(conversationId: number, modelConfig: any): Promise<Conversation> {
+  async updateModelConfig(conversationId: string, modelConfig: any): Promise<Conversation> {
     const conversation = await this.conversationsRepository.findOneBy({ id: conversationId });
     if (!conversation) {
       throw new NotFoundException(`Conversa com ID ${conversationId} não encontrada.`);

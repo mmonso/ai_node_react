@@ -1,5 +1,5 @@
 export interface Conversation {
-  id: number;
+  id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -9,12 +9,12 @@ export interface Conversation {
   modelConfig?: ModelConfig | null;
   isPersona?: boolean;
   systemPrompt?: string | null;
-  folderId?: number | null;
+  folderId?: string | null;
   folder?: Folder | null;
 }
 
 export interface Folder {
-  id: number;
+  id: string;
   name: string;
   systemPrompt?: string | null;
   userId: string; // Ou o tipo correspondente do seu backend
@@ -24,7 +24,7 @@ export interface Folder {
 
 export interface Message {
   id?: number;
-  conversationId: number;
+  conversationId: string;
   content: string;
   isUser: boolean;
   timestamp: string;
@@ -89,4 +89,16 @@ export interface FileResponse {
   fileName: string;
   fileSize: number;
   fileType: string;
-} 
+}
+
+// export interface Agent { // Removido
+//   id: string; // UUID
+//   name: string;
+//   systemPrompt?: string | null;
+//   telegramChatId?: string | null;
+// }
+export interface MainAgentData {
+  id: string;
+  name: string;
+  conversationId: string | null;
+}

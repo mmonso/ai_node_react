@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -20,6 +20,7 @@ import { OpenAIModule } from '../openai/openai.module';
 import { ConfigModule } from '../config/config.module';
 import { ModelsModule } from '../models/models.module';
 import { WebSearchModule } from '../web-search/web-search.module';
+import { AgentsModule } from '../agents/agents.module'; // Adicionar importação
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { WebSearchModule } from '../web-search/web-search.module';
     ConfigModule,
     ModelsModule,
     WebSearchModule,
+    forwardRef(() => AgentsModule), // Adicionar para quebrar ciclos potenciais
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads',

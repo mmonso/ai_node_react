@@ -177,7 +177,10 @@ export const DeleteButton = styled(ActionButton)`
   margin-left: 0.2rem;
   color: var(--error-color, #e53935);
 `;
-export const EditButton = styled(ActionButton)``;
+export const EditButton = styled(ActionButton)`
+  position: relative;
+  bottom: -1rem;
+`;
 export const CancelButton = styled(EditButtonBase)``;
 
 export const MessageContainer = styled.div<{ $isUser: boolean }>`
@@ -203,7 +206,7 @@ export const MessageContent = styled.div<{ $isUser: boolean }>`
   padding: 0.6rem 1rem;
   max-width: ${props => props.$isUser ? '80%' : '100%'};
   word-break: break-word;
-  margin-bottom: 0;
+  margin-bottom: ${props => props.$isUser ? '0.3rem' : '0'};
   margin-left: ${props => props.$isUser ? '2rem' : '0'};
   transition: all 0.3s ease;
   overflow: visible;

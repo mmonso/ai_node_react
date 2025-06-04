@@ -15,11 +15,17 @@ import { ConfigModule } from './config/config.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ModelsModule } from './models/models.module'; // Import ModelsModule
 import { FoldersModule } from './folders/folders.module'; // Import FoldersModule
+import { TelegramModule } from './telegram/telegram.module'; // Import TelegramModule
+import { ToolsModule } from './tools/tools.module'; // Import ToolsModule
+import { CalendarModule } from './calendar/calendar.module'; // Import CalendarModule
+import { AgentsModule } from './agents/agents.module'; // Import AgentsModule
 import { Conversation } from './entities/conversation.entity';
 import { Message } from './entities/message.entity';
 import { Config } from './entities/config.entity';
 import { Model } from './entities/model.entity'; // Import Model entity
 import { Folder } from './entities/folder.entity'; // Import Folder entity
+import { Event } from './entities/event.entity'; // Import Event entity
+import { AgentEntity } from './entities/agent.entity'; // Import AgentEntity
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -32,7 +38,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: join(process.cwd(), 'data', 'chat.sqlite'),
-      entities: [Conversation, Message, Config, Model, Folder],
+      entities: [Conversation, Message, Config, Model, Folder, Event, AgentEntity],
       synchronize: true,
       logging: false, // Alterado para desabilitar logs de query do TypeORM
     }),
@@ -59,6 +65,10 @@ import { ScheduleModule } from '@nestjs/schedule';
     UploadsModule,
     ModelsModule, // Add ModelsModule
     FoldersModule, // Add FoldersModule
+    TelegramModule, // Add TelegramModule
+    ToolsModule, // Add ToolsModule
+    CalendarModule, // Add CalendarModule
+    AgentsModule, // Add AgentsModule
   ],
   controllers: [],
   providers: [],
