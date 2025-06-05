@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import { ConfigModule as NestConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express'; // Importar MulterModule
 import { join } from 'path';
@@ -35,25 +35,59 @@ import { ScheduleModule } from '@nestjs/schedule';
     NestConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: join(process.cwd(), 'data', 'chat.sqlite'),
-      entities: [Conversation, Message, Config, Model, Folder, Event, AgentEntity],
-      synchronize: true,
-      logging: false, // Alterado para desabilitar logs de query do TypeORM
+    TypeOrmModule.forRootAsync({
+      imports: [NestConfigModule], // NestConfigModule já é global, mas pode ser mantido para clareza
+      useFactory: (configService: ConfigService) => {
+        const dbType = configService.get<string>('DB_TYPE', 'sqlite');
+        const commonEntities = [Conversation, Message, Config, Model, Folder, Event, AgentEntity];
+
+        if (dbType === 'sqlite') {
+          return {
+            type: 'sqlite',
+            database: configService.get<string>('DB_DATABASE', join(process.cwd(), 'data', 'chat.sqlite')),
+            entities: commonEntities,
+            synchronize: configService.get<string>('NODE_ENV') !== 'production',
+            logging: false,
+          };
+        } else {
+          // Configuração para outros bancos de dados (PostgreSQL, MySQL, etc.)
+          return {
+            type: dbType as any, // 'postgres', 'mysql', etc.
+            host: configService.get<string>('DB_HOST'),
+            port: configService.get<number>('DB_PORT'),
+            username: configService.get<string>('DB_USERNAME'),
+            password: configService.get<string>('DB_PASSWORD'),
+            database: configService.get<string>('DB_DATABASE'),
+            entities: commonEntities,
+            synchronize: configService.get<string>('NODE_ENV') !== 'production', // false em produção
+            logging: configService.get<string>('NODE_ENV') !== 'production' ? ['query', 'error'] : ['error'], // Mais logs em dev
+            // Adicione outras opções específicas do banco de dados aqui, se necessário
+            // Ex: ssl: configService.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : undefined,
+          };
+        }
+      },
+      inject: [ConfigService],
     }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
-      serveRoot: '/uploads',
+    ServeStaticModule.forRootAsync({
+      imports: [NestConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ([{
+        rootPath: configService.get<string>('UPLOADS_DIR', join(__dirname, '..', 'uploads')),
+        serveRoot: '/uploads',
+      }]),
     }),
-    MulterModule.register({
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, callback) => {
-          const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
-          const ext = extname(file.originalname);
-          callback(null, `${uniqueSuffix}${ext}`);
-        },
+    MulterModule.registerAsync({
+      imports: [NestConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        storage: diskStorage({
+          destination: configService.get<string>('UPLOADS_DIR', './uploads'),
+          filename: (req, file, callback) => {
+            const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
+            const ext = extname(file.originalname);
+            callback(null, `${uniqueSuffix}${ext}`);
+          },
+        }),
       }),
     }),
     ConversationsModule,

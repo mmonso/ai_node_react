@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Logger } from '@nestjs/common';
 import { ActiveModelService } from './active-model.service';
+import { SetActiveModelDto } from './dto/set-active-model.dto';
+import { ModelDefaultConfigDto } from './dto/model-default-config.dto'; // Usaremos este diretamente
 
 @Controller('active-model')
 export class ActiveModelController {
@@ -14,15 +16,15 @@ export class ActiveModelController {
   }
 
   @Post()
-  async setActiveModel(@Body() body: { modelId: string; modelConfig?: any }) {
-    this.logger.log(`Definindo modelo ativo: ID=${body.modelId}`);
-    return this.activeModelService.setActiveModel(body.modelId, body.modelConfig);
+  async setActiveModel(@Body() setActiveModelDto: SetActiveModelDto) {
+    this.logger.log(`Definindo modelo ativo: ID=${setActiveModelDto.modelId}`);
+    return this.activeModelService.setActiveModel(setActiveModelDto.modelId, setActiveModelDto.modelConfig);
   }
 
   @Post('config')
-  async updateConfig(@Body() modelConfig: any) {
+  async updateConfig(@Body() modelConfigDto: ModelDefaultConfigDto) {
     this.logger.log('Atualizando configuração do modelo ativo');
-    this.activeModelService.updateActiveModelConfig(modelConfig);
+    this.activeModelService.updateActiveModelConfig(modelConfigDto);
     return { success: true };
   }
 }

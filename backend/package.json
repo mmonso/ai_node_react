@@ -40,7 +40,9 @@
     "sqlite3": "^5.1.6",
     "typeorm": "^0.3.17",
     "uuid": "^11.1.0",
-    "node-telegram-bot-api": "^0.64.0"
+    "node-telegram-bot-api": "^0.64.0",
+    "@nestjs/swagger": "^7.0.0",
+    "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^9.0.0",

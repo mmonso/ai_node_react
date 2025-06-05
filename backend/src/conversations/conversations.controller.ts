@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UploadedFile, UseInterceptors, Query, Logger, ParseIntPipe, HttpCode, HttpStatus, ParseBoolPipe, DefaultValuePipe, Patch } from '@nestjs/common'; // Added Patch
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConversationsService } from './conversations.service';
 import { MessageService } from './message.service'; // Adicionado MessageService
@@ -14,6 +15,11 @@ import * as path from 'path';
 import { ActiveModelService } from '../models/active-model.service';
 import { UpdateMessageDto } from './dto/update-message.dto'; // Adicionado UpdateMessageDto
 
+import { CreateConversationDto } from './dto/create-conversation.dto'; // Será criado
+import { UpdateConversationDto } from './dto/update-conversation.dto'; // Será criado
+import { AddMessageDto } from './dto/add-message.dto'; // Será criado
+
+@ApiTags('Conversations')
 @Controller('conversations')
 export class ConversationsController {
   private readonly logger = new Logger(ConversationsController.name);
@@ -31,29 +37,47 @@ export class ConversationsController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Listar todas as conversas' })
+  @ApiResponse({ status: 200, description: 'Lista de conversas retornada com sucesso.', type: [Conversation] })
   findAll(): Promise<Conversation[]> {
     return this.conversationsService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Buscar uma conversa pelo ID' })
+  @ApiParam({ name: 'id', description: 'ID da conversa', type: String })
+  @ApiResponse({ status: 200, description: 'Conversa retornada com sucesso.', type: Conversation })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   findOne(@Param('id') id: string): Promise<Conversation> {
     return this.conversationsService.findOne(id);
   }
 
   @Post()
-  create(@Body() body: { title: string; modelId?: string; systemPrompt?: string; isPersona?: boolean }): Promise<Conversation> {
-    return this.conversationsService.create(body.title, body.modelId, body.systemPrompt, body.isPersona);
+  @ApiOperation({ summary: 'Criar uma nova conversa' })
+  @ApiBody({ type: CreateConversationDto })
+  @ApiResponse({ status: 201, description: 'Conversa criada com sucesso.', type: Conversation })
+  create(@Body() createConversationDto: CreateConversationDto): Promise<Conversation> {
+    return this.conversationsService.create(createConversationDto.title, createConversationDto.modelId, createConversationDto.systemPrompt, createConversationDto.isPersona);
   }
 
   @Put(':id')
+  @ApiOperation({ summary: 'Atualizar uma conversa existente' })
+  @ApiParam({ name: 'id', description: 'ID da conversa a ser atualizada', type: String })
+  @ApiBody({ type: UpdateConversationDto })
+  @ApiResponse({ status: 200, description: 'Conversa atualizada com sucesso.', type: Conversation })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   update(
     @Param('id') id: string,
-    @Body() body: { title: string; isPersona?: boolean; systemPrompt?: string | null },
+    @Body() updateConversationDto: UpdateConversationDto,
   ): Promise<Conversation> {
-    return this.conversationsService.update(id, body.title, body.isPersona, body.systemPrompt);
+    return this.conversationsService.update(id, updateConversationDto.title, updateConversationDto.isPersona, updateConversationDto.systemPrompt);
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Deletar uma conversa' })
+  @ApiParam({ name: 'id', description: 'ID da conversa a ser deletada', type: String })
+  @ApiResponse({ status: 200, description: 'Conversa deletada com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   delete(@Param('id') id: string): Promise<void> {
     return this.conversationsService.delete(id);
   }
@@ -61,7 +85,12 @@ export class ConversationsController {
   // --- Rotas para Pastas ---
 
   @Post(':conversationId/folder/:folderId')
-  @HttpCode(HttpStatus.OK) // Retorna 200 OK em vez de 201 Created
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Adicionar conversa a uma pasta' })
+  @ApiParam({ name: 'conversationId', description: 'ID da conversa', type: String })
+  @ApiParam({ name: 'folderId', description: 'ID da pasta', type: Number })
+  @ApiResponse({ status: 200, description: 'Conversa adicionada à pasta com sucesso.', type: Conversation })
+  @ApiResponse({ status: 404, description: 'Conversa ou pasta não encontrada.' })
   addConversationToFolder(
     @Param('conversationId') conversationId: string,
     @Param('folderId', ParseIntPipe) folderId: number,
@@ -71,7 +100,11 @@ export class ConversationsController {
   }
 
   @Delete(':conversationId/folder')
-  @HttpCode(HttpStatus.OK) // Retorna 200 OK
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remover conversa de uma pasta' })
+  @ApiParam({ name: 'conversationId', description: 'ID da conversa', type: String })
+  @ApiResponse({ status: 200, description: 'Conversa removida da pasta com sucesso.', type: Conversation })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   removeConversationFromFolder(
     @Param('conversationId') conversationId: string,
   ): Promise<Conversation> {
@@ -83,6 +116,11 @@ export class ConversationsController {
   
   @Patch(':conversationId/model')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Atualizar modelo da conversa' })
+  @ApiParam({ name: 'conversationId', description: 'ID da conversa', type: String })
+  @ApiBody({ schema: { properties: { modelId: { type: 'string' }, modelConfig: { type: 'object', additionalProperties: true } } } })
+  @ApiResponse({ status: 200, description: 'Modelo da conversa atualizado com sucesso.', type: Conversation })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   updateConversationModel(
     @Param('conversationId') conversationId: string,
     @Body() body: { modelId: string; modelConfig?: any },
@@ -132,9 +170,16 @@ export class ConversationsController {
  
   @Post(':id/messages')
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Adicionar uma nova mensagem a uma conversa e obter resposta do AI' })
+  @ApiParam({ name: 'id', description: 'ID da conversa', type: String })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: AddMessageDto })
+  @ApiQuery({ name: 'web_search', description: 'Usar busca na web para a resposta', type: Boolean, required: false })
+  @ApiResponse({ status: 201, description: 'Mensagem adicionada e resposta do AI retornada.', type: [Message] })
+  @ApiResponse({ status: 404, description: 'Conversa não encontrada.' })
   async addMessage(
     @Param('id') id: string,
-    @Body() body: { content: string; modelConfig?: string },
+    @Body() addMessageDto: AddMessageDto,
     @Query('web_search', new DefaultValuePipe(false), ParseBoolPipe) useWebSearch: boolean,
     @UploadedFile() file?: Express.Multer.File,
   ): Promise<Message[]> {
@@ -144,9 +189,12 @@ export class ConversationsController {
     this.logger.log(`Recebida nova mensagem para conversa ${id}. Busca na web: ${useWebSearch ? 'ativada' : 'desativada'}`);
     
     // Processar a configuração do modelo, se fornecida
-    if (body.modelConfig) {
+    if (addMessageDto.modelConfig) {
       try {
-        modelConfig = JSON.parse(body.modelConfig);
+        // modelConfig já é um objeto se class-transformer estiver funcionando corretamente com o DTO
+        // Se modelConfig for uma string JSON, precisará ser parseado.
+        // Para simplificar, assumimos que o DTO já lida com a transformação.
+        modelConfig = typeof addMessageDto.modelConfig === 'string' ? JSON.parse(addMessageDto.modelConfig) : addMessageDto.modelConfig;
         this.logger.log(`Configuração do modelo recebida: ${JSON.stringify(modelConfig)}`);
       } catch (e) {
         this.logger.error(`Erro ao processar configuração do modelo: ${e.message}`);
@@ -167,7 +215,7 @@ export class ConversationsController {
     // Adicionar a mensagem do usuário
     const userMessage = await this.conversationsService.addUserMessage(
       id,
-      body.content,
+      addMessageDto.content,
       imageUrl,
       fileUrl,
     );
@@ -209,10 +257,29 @@ export class ConversationsController {
   }
 
   @Patch('messages/:messageId')
+  @ApiOperation({ summary: 'Atualizar o conteúdo de uma mensagem existente' })
+  @ApiParam({ name: 'messageId', description: 'ID da mensagem a ser atualizada', type: String })
+  @ApiBody({ type: UpdateMessageDto })
+  @ApiResponse({ status: 200, description: 'Mensagem atualizada com sucesso.', type: Message })
+  @ApiResponse({ status: 404, description: 'Mensagem não encontrada.' })
   async updateMessage(
     @Param('messageId') messageId: string,
     @Body() updateMessageDto: UpdateMessageDto,
   ): Promise<Message> {
     return this.messageService.updateMessageContent(messageId, updateMessageDto);
+  }
+
+  @Delete('messages/:messageId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Deletar uma mensagem permanentemente (hard delete)' })
+  @ApiParam({ name: 'messageId', description: 'ID da mensagem a ser deletada permanentemente', type: String })
+  @ApiResponse({ status: 204, description: 'Mensagem deletada permanentemente com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Mensagem não encontrada.' })
+  async deleteMessage(
+    @Param('messageId') messageId: string,
+  ): Promise<void> {
+    this.logger.log(`Requisição para hard delete da mensagem com ID: ${messageId}`);
+    await this.messageService.deleteMessage(messageId);
+    // Nenhuma resposta de corpo para 204 No Content
   }
 }

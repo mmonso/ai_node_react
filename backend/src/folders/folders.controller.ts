@@ -9,9 +9,9 @@ import {
   UseGuards,
   Req,
   ParseIntPipe,
-  ValidationPipe, // Adicionar ValidationPipe
+  // ValidationPipe, // Não é mais necessário importar localmente se global está ativo
   HttpCode, // Adicionar HttpCode para o status 204 no delete
-  UsePipes, // Adicionar UsePipes
+  // UsePipes, // Não é mais necessário importar localmente se global está ativo
 } from '@nestjs/common';
 import { FoldersService } from './folders.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
@@ -25,7 +25,7 @@ export class FoldersController {
   constructor(private readonly foldersService: FoldersService) {}
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  // @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) // Removido, pipe global atua
   create(@Body() createFolderDto: CreateFolderDto, @Req() req) {
     // const userId = req.user.userId; // Substitua pela forma correta de obter o userId
     const userId = 'temp-user-id'; // Placeholder - SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO
@@ -47,7 +47,7 @@ export class FoldersController {
   }
 
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  // @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) // Removido, pipe global atua
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFolderDto: UpdateFolderDto,

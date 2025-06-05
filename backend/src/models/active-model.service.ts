@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Model } from '../entities/model.entity';
 import { ModelsService } from './models.service';
 
@@ -63,17 +63,40 @@ export class ActiveModelService {
     if (this.activeModelId) {
       const model = await this.modelsService.findOne(this.activeModelId);
       if (!model) {
-        this.logger.warn(`Modelo ativo não encontrado: ${this.activeModelId}`);
+        this.logger.warn(`Modelo ativo ID '${this.activeModelId}' não encontrado. Tentando re-inicializar...`);
+        const previousActiveModelId = this.activeModelId; // Salva o ID problemático para a mensagem de erro
+        this.activeModelId = null; // Força a re-tentativa de initDefaultModel
+        this.activeModelConfig = null;
         await this.initDefaultModel();
-        return this.getActiveModel();
+
+        if (!this.activeModelId) {
+          this.logger.error(`Nenhum modelo ativo pôde ser definido mesmo após tentativa de re-inicialização (ID anterior: ${previousActiveModelId}).`);
+          throw new ServiceUnavailableException('Nenhum modelo ativo disponível no momento. Verifique a configuração dos modelos.');
+        }
+        
+        // Tenta buscar o novo modelo ativo após a re-inicialização
+        const reinitializedModel = await this.modelsService.findOne(this.activeModelId);
+        if (!reinitializedModel) {
+          this.logger.error(`Modelo ativo ID '${this.activeModelId}' (após re-inicialização do problemático '${previousActiveModelId}') não encontrado.`);
+          this.activeModelId = null;
+          this.activeModelConfig = null;
+          throw new NotFoundException(`O modelo ativo configurado (ID: ${this.activeModelId}, tentado após falha com ${previousActiveModelId}) não foi encontrado no sistema.`);
+        }
+        this.logger.log(`Modelo ativo re-inicializado para: ${reinitializedModel.name} após falha ao encontrar ${previousActiveModelId}`);
+        return {
+            model: reinitializedModel,
+            config: this.activeModelConfig || reinitializedModel.defaultConfig
+        };
       }
-      return { 
-        model, 
-        config: this.activeModelConfig || model.defaultConfig 
+      return {
+        model,
+        config: this.activeModelConfig || model.defaultConfig
       };
     }
     
-    return { model: null, config: null };
+    // Se this.activeModelId é nulo (e initDefaultModel no início do método não conseguiu definir um)
+    this.logger.error('Nenhum modelo ativo pôde ser definido na inicialização ou após falha na busca.');
+    throw new ServiceUnavailableException('Nenhum modelo ativo disponível. Verifique a lista de modelos e sua disponibilidade.');
   }
   
   /**
@@ -84,8 +107,8 @@ export class ActiveModelService {
       const model = await this.modelsService.findOne(modelId);
       
       if (!model) {
-        this.logger.warn(`Modelo com ID ${modelId} não encontrado`);
-        return { model: null, config: null };
+        this.logger.warn(`Tentativa de definir modelo ativo com ID '${modelId}', mas o modelo não foi encontrado.`);
+        throw new NotFoundException(`Modelo com ID '${modelId}' não encontrado. Não foi possível definir como ativo.`);
       }
       
       this.activeModelId = modelId;
@@ -95,8 +118,12 @@ export class ActiveModelService {
       
       return { model, config: this.activeModelConfig };
     } catch (error) {
-      this.logger.error(`Erro ao definir modelo ativo (ID: ${modelId}):`, error);
-      return { model: null, config: null };
+      this.logger.error(`Erro ao definir modelo ativo (ID: ${modelId}): ${error.message}`, error.stack);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // Para outros erros, como falhas no modelsService.findOne que não sejam NotFoundException
+      throw new ServiceUnavailableException(`Erro ao tentar definir o modelo ativo (ID: ${modelId}): ${error.message}`);
     }
   }
   

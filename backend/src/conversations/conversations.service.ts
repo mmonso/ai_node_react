@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common'; // Adicionado Logger
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm'; // Adicionado EntityManager
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { Folder } from '../entities/folder.entity'; // Added Folder import
@@ -32,12 +32,22 @@ export class ConversationsService {
     private messageService: MessageService, // Adicionado MessageService
     private aiResponseService: AIResponseService, // Adicionado AIResponseService
     private conversationTitleService: ConversationTitleService, // Injetar o novo serviço
+    private entityManager: EntityManager, // Adicionado EntityManager
   ) {}
   
   async findAll(): Promise<Conversation[]> {
-    return this.conversationsRepository.find({
-      order: { updatedAt: 'DESC' },
-    });
+    return this.conversationsRepository
+      .createQueryBuilder('conversation')
+      .select([
+        'conversation.id',
+        'conversation.title',
+        'conversation.updatedAt',
+        'conversation.isPersona',
+        'conversation.modelId',
+        'conversation.folderId',
+      ])
+      .orderBy('conversation.updatedAt', 'DESC')
+      .getMany();
   }
 
   async findOne(id: string): Promise<Conversation> {
@@ -95,15 +105,18 @@ export class ConversationsService {
   }
 
   async delete(id: string): Promise<void> {
-    // Deleta todas as mensagens relacionadas à conversa
-    await this.messagesRepository
-      .createQueryBuilder()
-      .delete()
-      .where("conversationId = :id", { id })
-      .execute();
+    await this.entityManager.transaction(async transactionalEntityManager => {
+      // Deleta todas as mensagens relacionadas à conversa
+      await transactionalEntityManager
+        .createQueryBuilder()
+        .delete()
+        .from(Message)
+        .where("conversationId = :id", { id })
+        .execute();
 
-    // Agora deleta a conversa
-    await this.conversationsRepository.delete(id);
+      // Agora deleta a conversa
+      await transactionalEntityManager.delete(Conversation, id);
+    });
   }
 
   async addUserMessage(conversationId: string, content: string, imageUrl?: string, fileUrl?: string): Promise<Message> {

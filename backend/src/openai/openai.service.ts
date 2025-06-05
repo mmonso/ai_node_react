@@ -33,10 +33,11 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
   async generateResponse(
     messages: any[],
     systemPrompt: string,
-    useWebSearch: boolean = false,
+    useWebSearch: boolean = false, // useWebSearch não é usado diretamente aqui, mas mantido pela interface
     model?: Model,
     modelConfig?: any,
     currentConversationId?: string, // ID da conversa atual que originou a chamada
+    webSearchResults?: string, // Novo parâmetro
   ): Promise<string> {
     try {
       if (!this.apiKey) {
@@ -71,11 +72,17 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
         tools: [obterDataHoraAtualToolDefinition, criarEventoCalendarioToolDefinition, listarEventosCalendarioToolDefinition],
         tool_choice: "auto",
       };
+      
+      let finalSystemPrompt = systemPrompt;
+      if (webSearchResults) {
+        this.logger.log('Incorporando webSearchResults ao system prompt para OpenAI.');
+        finalSystemPrompt += `\n\nContexto adicional da busca na web:\n${webSearchResults}`;
+      }
 
-      this.logger.debug(`Gerando resposta para Conversa com ${messages.length} mensagens e prompt do sistema.`);
+      this.logger.debug(`Gerando resposta para Conversa com ${messages.length} mensagens e prompt do sistema. WebSearchResults fornecidos: ${!!webSearchResults}`);
       initialRequestBody.messages.push({
         role: "system",
-        content: systemPrompt,
+        content: finalSystemPrompt,
       });
 
       // Adicionar as mensagens anteriores no formato correto
@@ -427,6 +434,11 @@ export class OpenAIService implements AIServiceInterface, ProviderApiService {
 
   getProviderName(): string {
     return "openai";
+  }
+
+  hasNativeGrounding(): boolean {
+    this.logger.debug('Verificando capacidade de grounding nativo do OpenAIService: false');
+    return false; // OpenAI (GPT via API de chat) não tem grounding nativo como o Gemini
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

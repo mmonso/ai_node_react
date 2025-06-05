@@ -1,4 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+  BadGatewayException,
+  ServiceUnavailableException,
+  HttpException, // Adicionado para capturar status genéricos
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios'; // Adicionado HttpService
 import { firstValueFrom } from 'rxjs'; // Adicionado firstValueFrom
@@ -37,7 +48,7 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
   private async _callGeminiApi(endpoint: string, method: 'GET' | 'POST' = 'POST', data: any = null): Promise<any> {
     if (!this.apiKey) {
       this.logger.error('Chave API Gemini não configurada. Não é possível chamar a API.');
-      throw new Error('Chave API Gemini não configurada');
+      throw new InternalServerErrorException('Chave API Gemini não configurada. Verifique as variáveis de ambiente.');
     }
 
     const url = `${this.GEMINI_API_BASE_URL}/${endpoint}?key=${this.apiKey}`;
@@ -59,11 +70,32 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        this.logger.error(`Erro Axios ao chamar API Gemini (${url}): ${error.message}`, error.response?.data);
-        throw new Error(`Erro na API Gemini (${error.response?.status || 'desconhecido'}): ${error.response?.data?.error?.message || error.message}`);
+        const status = error.response?.status;
+        const errorMessage = error.response?.data?.error?.message || error.message;
+        this.logger.error(`Erro Axios ao chamar API Gemini (${url}): Status ${status}, Mensagem: ${errorMessage}`, error.response?.data);
+
+        switch (status) {
+          case 400:
+            throw new BadRequestException(`Erro na API Gemini (400): ${errorMessage}`);
+          case 401:
+            throw new UnauthorizedException(`Erro na API Gemini (401): Não autorizado. Verifique sua chave API. ${errorMessage}`);
+          case 403:
+            throw new ForbiddenException(`Erro na API Gemini (403): Acesso proibido. ${errorMessage}`);
+          case 404:
+            throw new NotFoundException(`Erro na API Gemini (404): Endpoint não encontrado. ${errorMessage}`);
+          case 429: // Too Many Requests
+             throw new HttpException('Muitas requisições para a API Gemini. Tente novamente mais tarde.', 429);
+          case 500:
+          case 502:
+          case 503:
+          case 504:
+            throw new BadGatewayException(`Erro no servidor da API Gemini (${status}): ${errorMessage}`);
+          default:
+            throw new ServiceUnavailableException(`Erro ao comunicar com a API Gemini (status ${status || 'desconhecido'}): ${errorMessage}`);
+        }
       }
       this.logger.error(`Erro desconhecido ao chamar API Gemini (${url}): ${error.message}`, error.stack);
-      throw error;
+      throw new InternalServerErrorException(`Erro interno ao processar a chamada para a API Gemini: ${error.message}`);
     }
   }
 
@@ -100,13 +132,14 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
     systemPrompt: string,
     useWebSearch: boolean = false,
     model?: Model,
-    modelConfig?: any
+    modelConfig?: any,
+    webSearchResults?: string, // Novo parâmetro
   ): Promise<string> {
     try {
-      this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema. Grounding: ${useWebSearch ? 'ativado' : 'desativado'}`);
+      this.logger.debug(`Gerando resposta com ${messages.length} mensagens e prompt do sistema. Grounding: ${useWebSearch ? 'ativado' : 'desativado'}. WebSearchResults fornecidos: ${!!webSearchResults}`);
       
       if (!this.apiKey) {
-        throw new Error('Chave API Gemini não configurada');
+        throw new InternalServerErrorException('Chave API Gemini não configurada para gerar resposta.');
       }
 
       let modelName = 'gemini-2.0-flash';
@@ -141,7 +174,12 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
         hour: '2-digit',
         minute: '2-digit'
       });
-      const enhancedSystemPrompt = `${systemPrompt}\nAgora é ${formattedDate}.`;
+      
+      let enhancedSystemPrompt = `${systemPrompt}\nAgora é ${formattedDate}.`;
+      if (webSearchResults) {
+        this.logger.log('Incorporando webSearchResults ao system prompt.');
+        enhancedSystemPrompt += `\n\nContexto adicional da busca na web:\n${webSearchResults}`;
+      }
       
       const metadata = {
         timestamp: now.toISOString(),
@@ -176,15 +214,13 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
 
         if (!data || !data.candidates || !data.candidates.length) {
           this.logger.error('Resposta da API Gemini não contém candidatos:', JSON.stringify(data));
-          // A exceção de _callGeminiApi já terá sido lançada se a API retornou erro.
-          // Se chegou aqui, a API respondeu OK mas o formato é inesperado.
-          return `Resposta da API Gemini sem candidatos válidos: ${JSON.stringify(data)}`;
+          throw new BadGatewayException('Resposta inválida da API Gemini: não contém candidatos.');
         }
 
         const candidate = data.candidates[0];
         if (!candidate.content || !candidate.content.parts || !candidate.content.parts.length) {
           this.logger.error('Estrutura de resposta da API Gemini inválida:', JSON.stringify(candidate));
-          return `Estrutura de resposta da API Gemini inválida: ${JSON.stringify(candidate)}`;
+          throw new BadGatewayException('Resposta inválida da API Gemini: estrutura de candidato malformada.');
         }
 
         if (data.usageMetadata) {
@@ -199,15 +235,21 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
 
       } catch (error) {
         // _callGeminiApi já loga o erro detalhado.
-        // Aqui podemos retornar uma mensagem mais genérica ou re-lançar.
-        this.logger.error(`Falha ao gerar resposta via Gemini API: ${error.message}`);
-        // Se _callGeminiApi lançou um Error com a mensagem da API, podemos usá-la.
-        return `Erro ao comunicar com a API Gemini: ${error.message}`;
+        // _callGeminiApi já loga o erro detalhado e lança uma HttpException.
+        // Se o erro não for uma HttpException, convertemos para InternalServerErrorException.
+        this.logger.error(`Falha ao gerar resposta via Gemini API: ${error.message}`, error.stack);
+        if (error instanceof HttpException) {
+          throw error;
+        }
+        throw new InternalServerErrorException(`Erro ao comunicar com a API Gemini: ${error.message}`);
       }
     } catch (error) {
       // Este catch captura erros que podem ocorrer antes da chamada à API, como a falta da chave.
-      this.logger.error('Erro crítico ao preparar para gerar resposta:', error);
-      throw error; // Re-lança para ser tratado pelo chamador do serviço.
+      this.logger.error('Erro crítico ao preparar para gerar resposta:', error.message, error.stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Erro interno ao preparar para gerar resposta: ${error.message}`);
     }
   }
 
@@ -216,7 +258,7 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
     this.logger.log(`Gerando título para a mensagem: "${firstUserMessage.substring(0, 50)}..."`);
     try {
       if (!this.apiKey) {
-        throw new Error('Chave API Gemini não configurada');
+        throw new InternalServerErrorException('Chave API Gemini não configurada para gerar título.');
       }
 
       const endpoint = 'models/gemini-2.0-flash:generateContent';
@@ -231,7 +273,7 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
 
       if (!data.candidates || !data.candidates.length || !data.candidates[0].content?.parts?.length) {
         this.logger.error('Resposta da API Gemini não contém candidatos ou partes de conteúdo válidas ao gerar título:', JSON.stringify(data));
-        return 'Nova Conversa'; // Retorna um título padrão em caso de resposta malformada
+        throw new BadGatewayException('Resposta inválida da API Gemini ao gerar título: estrutura malformada.');
       }
 
       let title = data.candidates[0].content.parts[0].text.trim();
@@ -260,14 +302,24 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
       
       return title;
     } catch (error) {
-      // _callGeminiApi já loga o erro.
-      this.logger.error(`Falha ao gerar título via Gemini API: ${error.message}`);
-      return 'Nova Conversa'; // Retorna um título padrão em caso de erro na API
+      // _callGeminiApi já loga o erro e lança HttpException.
+      this.logger.error(`Falha ao gerar título via Gemini API: ${error.message}`, error.stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      // Para outros erros, retorna um título padrão ou lança uma exceção mais genérica.
+      // Lançar exceção é mais consistente com o tratamento de erros.
+      throw new InternalServerErrorException(`Erro ao gerar título via API Gemini: ${error.message}`);
     }
   }
 
   getProviderName(): string {
     return "gemini";
+  }
+
+  hasNativeGrounding(): boolean {
+    this.logger.debug('Verificando capacidade de grounding nativo do GeminiService: true');
+    return true; // Gemini tem grounding nativo
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
@@ -294,8 +346,7 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
         
         if (!responseData || !responseData.models) {
           this.logger.error('Resposta da API Gemini não contém a propriedade "models" ou está vazia.');
-          // _callGeminiApi lançaria erro se a API falhasse, então aqui é uma resposta OK mas malformada.
-          throw new Error('Resposta inválida da API Gemini: propriedade "models" ausente.');
+          throw new BadGatewayException('Resposta inválida da API Gemini ao listar modelos: propriedade "models" ausente.');
         }
 
         const modelsFromApi = responseData.models;
@@ -350,7 +401,8 @@ export class GeminiService implements AIServiceInterface, ProviderApiService {
         
         if (attempt === MAX_RETRIES) {
           this.logger.error('Todas as tentativas de listar modelos do Gemini falharam.');
-          return []; // Retorna array vazio após todas as tentativas falharem
+          // Lançar uma exceção aqui em vez de retornar array vazio
+          throw new ServiceUnavailableException('Não foi possível listar os modelos do Gemini após múltiplas tentativas.');
         }
         await delay(RETRY_DELAY_MS);
       }

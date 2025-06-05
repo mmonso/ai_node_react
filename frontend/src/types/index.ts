@@ -32,6 +32,7 @@ export interface Message {
   fileUrl?: string;
   fileName?: string;
   groundingMetadata?: GroundingMetadata;
+  deleted?: boolean;
 }
 
 export interface GroundingMetadata {

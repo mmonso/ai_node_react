@@ -81,4 +81,24 @@ export class MessageService {
     message.content = updateMessageDto.content;
     return this.messagesRepository.save(message);
   }
+  async deleteMessage(messageId: string): Promise<void> {
+    const numericMessageId = parseInt(messageId, 10);
+    if (isNaN(numericMessageId)) {
+      this.logger.warn(`Invalid Message ID format for delete: "${messageId}"`);
+      throw new NotFoundException(`Invalid Message ID format: "${messageId}"`);
+    }
+
+    this.logger.log(`Attempting to hard delete message with ID: ${numericMessageId}`);
+    
+    // O método delete retorna um DeleteResult, que contém { affected?: number | null, raw: any }
+    const deleteResult = await this.messagesRepository.delete(numericMessageId);
+
+    if (deleteResult.affected === 0) {
+      this.logger.warn(`Message with ID "${numericMessageId}" not found for delete, or already deleted.`);
+      throw new NotFoundException(`Message with ID "${numericMessageId}" not found`);
+    }
+    
+    this.logger.log(`Message with ID "${numericMessageId}" hard deleted successfully. Affected rows: ${deleteResult.affected}`);
+    // Não há entidade para retornar, pois foi excluída permanentemente.
+  }
 }

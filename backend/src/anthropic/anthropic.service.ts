@@ -105,30 +105,45 @@ export class AnthropicService implements AIServiceInterface, ProviderApiService 
   async generateResponse(
     messages: Message[],
     systemPrompt: string,
-    useWebSearch: boolean,
+    useWebSearch: boolean, // useWebSearch não é usado diretamente aqui, mas mantido pela interface
     model: Model | null,
-    modelConfig: any
+    modelConfig: any,
+    webSearchResults?: string, // Novo parâmetro
   ): Promise<string> {
-    this.logger.log('Gerando resposta com Anthropic Claude...');
+    this.logger.log(`Gerando resposta com Anthropic Claude... WebSearchResults fornecidos: ${!!webSearchResults}`);
     
     // Verificar se a chave API está configurada
     if (!this.apiKey) {
       throw new Error('Chave API Anthropic não configurada');
     }
     
+    let finalSystemPrompt = systemPrompt;
+    if (webSearchResults) {
+      this.logger.log('Incorporando webSearchResults ao system prompt para Anthropic.');
+      finalSystemPrompt += `\n\nContexto adicional da busca na web:\n${webSearchResults}`;
+    }
+
     // Implementação da chamada para Anthropic API
     // Aqui seria o código específico para chamar a API da Anthropic
+    // Usando finalSystemPrompt
     
     // Exemplo simplificado (precisaria ser implementado com a SDK da Anthropic)
     try {
       // Formatação das mensagens no formato esperado pela API da Anthropic
+      // (usando finalSystemPrompt como system message)
       // Implementação real para integração com a API da Anthropic
 
-      return 'Exemplo de resposta do Claude - esta é uma implementação de exemplo.';
+      this.logger.debug(`System prompt final para Anthropic: ${finalSystemPrompt}`);
+      return `Exemplo de resposta do Claude (com system prompt: "${finalSystemPrompt.substring(0,100)}...") - esta é uma implementação de exemplo.`;
     } catch (error) {
       this.logger.error(`Erro ao chamar API da Anthropic: ${error.message}`);
       throw new Error(`Falha ao gerar resposta com Anthropic: ${error.message}`);
     }
+  }
+
+  hasNativeGrounding(): boolean {
+    this.logger.debug('Verificando capacidade de grounding nativo do AnthropicService: false');
+    return false; // Anthropic (Claude) não tem grounding nativo como o Gemini
   }
 
   async generateConversationTitle(content: string): Promise<string> {

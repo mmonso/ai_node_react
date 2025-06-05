@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import Layout from '../components/Layout';
@@ -282,33 +282,27 @@ const ChatPage: React.FC = () => {
       console.log('Mensagem do usuário com imagem:', userMessageWithImage?.imageUrl);
       
       // Atualiza a conversa com as mensagens recebidas do servidor
-      if (updatedMessages && updatedMessages.length > 0) {
-        // Pega a última mensagem, que deve ser a resposta do bot
-        const botResponse = updatedMessages[updatedMessages.length - 1];
-        
-        if (!botResponse.isUser) {
-          // Adicione apenas a resposta do bot ao final, preservando as mensagens existentes
-          setConversation((prevConversation) => {
-            if (!prevConversation) {
-              // Se de alguma forma for null, criar uma nova conversa com os valores mínimos
-              return {
-                id: id, // Usar o id da URL que é string
-                title: conversation?.title || 'Nova Conversa',
-                createdAt: conversation?.createdAt || new Date().toISOString(),
-                updatedAt: conversation?.updatedAt || new Date().toISOString(),
-                messages: [botResponse]
-                // folderId: conversation?.folderId // Removido
-              };
-            }
-            
+      if (updatedMessages) { // Garante que updatedMessages não é null/undefined
+        setConversation((prevConversation) => {
+          if (!prevConversation) {
+            // Caso de fallback, se prevConversation for null (improvável neste ponto, mas seguro)
+            // Isso pode acontecer se a conversa foi deletada ou houve um erro antes.
+            // Usamos o 'id' da URL, que é garantido como string.
             return {
-              ...prevConversation,
-              messages: [...(prevConversation.messages || []), botResponse]
+              id: id,
+              title: 'Nova Conversa', // Um título padrão se não houver um anterior
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              messages: updatedMessages, // Usa a lista completa do backend
+              // folderId: undefined // Se folderId for parte do tipo Conversation
             };
-          });
-        } else {
-          console.warn('A última mensagem retornada do servidor não é do bot');
-        }
+          }
+          // Substitui completamente as mensagens locais pelas do backend
+          return {
+            ...prevConversation,
+            messages: updatedMessages
+          };
+        });
       }
       
       // Atualiza a lista de conversas se for a primeira mensagem
@@ -328,19 +322,25 @@ const ChatPage: React.FC = () => {
     }
   };
   
-const updateMessageInConversation = (updatedMessage: Message) => {
+const updateMessageInConversation = useCallback((updatedMessageData: Message) => {
+    // Cria uma cópia da mensagem recebida para poder modificá-la
+    // O messageToUpdate já virá com a propriedade 'deleted: true' do ChatMessage.tsx
+    // para casos de exclusão. Para edições, virá com o conteúdo atualizado.
+    // A verificação de 'deletedAt' não é mais necessária aqui.
+    const messageToUpdate = { ...updatedMessageData };
+
     setConversation(prevConversation => {
       if (prevConversation && prevConversation.messages) {
         return {
           ...prevConversation,
           messages: prevConversation.messages.map(msg =>
-            msg.id === updatedMessage.id ? updatedMessage : msg
+            msg.id === messageToUpdate.id ? messageToUpdate : msg
           ),
         };
       }
       return prevConversation;
     });
-  };
+  }, [setConversation]);
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -393,8 +393,8 @@ const updateMessageInConversation = (updatedMessage: Message) => {
             </EmptyState>
           ) : (
             <>
-              {/* Renderiza todas as mensagens existentes */}
-              {conversation?.messages?.map((message) => (
+              {/* Renderiza todas as mensagens existentes, exceto as excluídas */}
+              {conversation?.messages?.filter(message => !message.deleted).map((message) => (
                 <ChatMessage
                   key={message.id}
                   message={message}

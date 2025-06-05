@@ -1,10 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class ImageProcessingService {
   private readonly logger = new Logger(ImageProcessingService.name);
+  private readonly uploadsPathFromConfig: string;
+
+  constructor(private configService: ConfigService) {
+    this.uploadsPathFromConfig = this.configService.get<string>('UPLOADS_DIR', './uploads');
+    this.logger.log(`Diretório de uploads configurado para: ${this.uploadsPathFromConfig}`);
+  }
 
   async getImageData(imageUrl: string): Promise<{ mimeType: string; data: string } | null> {
     this.logger.debug(`Tentando processar imagem com URL: ${imageUrl}`);
@@ -23,8 +30,9 @@ export class ImageProcessingService {
       // __dirname aqui será algo como backend/dist/image-processing
       // Portanto, precisamos subir alguns níveis para chegar à raiz do projeto e depois a 'uploads'
       // Assumindo que 'uploads' está em 'backend/uploads'
-      const uploadDir = path.join(__dirname, '..', '..', 'uploads'); 
-      const imagePath = path.join(uploadDir, imageName);
+      // const uploadDir = path.join(__dirname, '..', '..', 'uploads');
+      // O caminho agora é obtido do ConfigService
+      const imagePath = path.join(this.uploadsPathFromConfig, imageName);
 
       this.logger.debug(`Caminho completo da imagem construído: ${imagePath}`);
 

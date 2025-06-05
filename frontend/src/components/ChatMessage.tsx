@@ -16,7 +16,7 @@ import {
 } from './ChatMessage.styles';
 import remarkGfm from 'remark-gfm';
 import { Message } from '../types';
-import { updateMessageContent } from '../services/api';
+import { updateMessageContent, deleteMessage } from '../services/api';
 import { SaveMessageIcon, CancelEditIcon } from './icons';
 import GroundingSources, { GroundingMetadata } from './GroundingSources';
 import CodeBlock from './CodeBlock';
@@ -123,11 +123,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false, on
     setEditText(processedContent);
   };
 
-  const handleDeleteClick = () => {
-    if (onUpdateMessage && window.confirm('Tem certeza que deseja excluir esta mensagem?')) {
-      // Criando uma cópia da mensagem e marcando-a para exclusão
-      const messageToDelete = { ...message, deleted: true };
-      onUpdateMessage(messageToDelete);
+  const handleDeleteClick = async () => {
+    if (onUpdateMessage && message.id && window.confirm('Tem certeza que deseja excluir esta mensagem permanentemente? Esta ação não pode ser desfeita.')) {
+      try {
+        await deleteMessage(String(message.id));
+        // Após a exclusão física bem-sucedida, informa ao componente pai para remover a mensagem da UI.
+        // Criamos um objeto Message simples com 'deleted: true' para sinalizar a remoção.
+        onUpdateMessage({ ...message, deleted: true });
+      } catch (error) {
+        console.error('Failed to permanently delete message:', error);
+        alert('Falha ao excluir mensagem permanentemente.');
+      }
     }
   };
 
@@ -284,4 +290,4 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isTyping = false, on
   );
 };
 
-export default ChatMessage;
+export default React.memo(ChatMessage);

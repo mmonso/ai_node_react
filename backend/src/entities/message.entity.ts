@@ -29,4 +29,5 @@ export class Message {
 
   @Column({ nullable: true })
   conversationId: number;
-} 
+
+}
